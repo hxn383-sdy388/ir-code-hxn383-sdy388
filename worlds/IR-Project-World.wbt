@@ -19,4 +19,5 @@ RectangleArena {
 }
 E-puck {
   controller "<extern>"
+  supervisor TRUE
 }
