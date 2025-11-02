@@ -1,13 +1,13 @@
 """main_controller controller."""
 import numpy as np
 
-# IMPORTS
+# ---------- IMPORTS ----------
 from controller import Robot
 from controller import Supervisor
 from controller import Keyboard # for driving in the "explore" phase
 
 
-# CONSTANTS
+# ---------- CONSTANTS ----------
 SPEED_UNIT = 0.00628
 MAX_SPEED = 200 # can go to a maximum of 1000. Speed limit helps keep motion of epuck smooth
 SPEED_INCREMENT = 4
@@ -16,13 +16,13 @@ RIGHT = 1
 PIXELS_PER_METRE = 100 # ratio of pixels per metre - i.e. 1 pixels corresponds to 1cm
 
 
-# VARIABLES & DATA STRUCTURES
+# ---------- VARIABLES & DATA STRUCTURES ----------
 speed = [0,0] # list for controlling the speed - done this way control speed using encoder steps rather than target velocity directly
 x_k = [0,0,0] # list for storing pose at current time $ k $, in the format [$ x $, $ y $, $ \theta $]
 u_k = [0,0] # list for storing the control applied at time $ k - 1 $ to drive the epuck to pose $ \vec{x}_k $ at time $ k $. Elements: linear velocity, angular velocity
 
 
-# SETUP
+# ---------- SETUP ----------
 # create the Robot instance
 # robot = Robot()
 robot = Supervisor() # for my stage of work, epuck is a supervisor to give me access to accurate positional data
@@ -64,56 +64,8 @@ display_origin_x = display_width / 2
 display_origin_y = display_height / 2
 
 
-# FUNCTIONS
-# Convenience
+# ---------- FUNCTIONS ----------
 # EKF-SLAM
-# Display
-def set_speed():
-    # update motors with value in speed list
-    left_motor.setVelocity(SPEED_UNIT * speed[LEFT])
-    right_motor.setVelocity(SPEED_UNIT * speed[RIGHT])
-    return
-
-def rad_to_deg(rads):
-    # convenience function
-    degs = rads * (180.0 / np.pi)
-    return degs
-
-def deg_to_rad(degs):
-    # convenience function
-    rads = degs * (np.pi / 180.0)
-    return rads
-
-def drive_logic():
-    key = kb.getKey()
-
-    # manipulate speed list based on what keyboard action is
-    if key == Keyboard.UP:
-        if speed[LEFT] < MAX_SPEED:
-            speed[LEFT] += SPEED_INCREMENT
-        if speed[RIGHT] < MAX_SPEED:
-            speed[RIGHT] += SPEED_INCREMENT
-    if key == Keyboard.DOWN:
-        if speed[LEFT] > -MAX_SPEED:
-            speed[LEFT] -= SPEED_INCREMENT
-        if speed[RIGHT] > -MAX_SPEED:
-            speed[RIGHT] -= SPEED_INCREMENT
-
-    if key == Keyboard.LEFT:
-        if speed[LEFT] > -MAX_SPEED:
-            speed[LEFT] -= SPEED_INCREMENT
-        if speed[RIGHT] < MAX_SPEED:
-            speed[RIGHT] += SPEED_INCREMENT
-    if key == Keyboard.RIGHT:
-        if speed[LEFT] < MAX_SPEED:
-            speed[LEFT] += SPEED_INCREMENT
-        if speed[RIGHT] > -MAX_SPEED:
-            speed[RIGHT] -= SPEED_INCREMENT
-
-    # send updated speed values to motors
-    set_speed()
-    return
-
 def get_pose():
     # goal:
     #   - return a vector $ x_k $ which represents the e-puck pose at the current time step $ k $
@@ -154,6 +106,55 @@ def get_control():
     u_k[1] = vz
     return
 
+# Convenience
+def rad_to_deg(rads):
+    # convenience function
+    degs = rads * (180.0 / np.pi)
+    return degs
+
+def deg_to_rad(degs):
+    # convenience function
+    rads = degs * (np.pi / 180.0)
+    return rads
+
+# Robot actuation
+def set_speed():
+    # update motors with value in speed list
+    left_motor.setVelocity(SPEED_UNIT * speed[LEFT])
+    right_motor.setVelocity(SPEED_UNIT * speed[RIGHT])
+    return
+
+def drive_logic():
+    key = kb.getKey()
+
+    # manipulate speed list based on what keyboard action is
+    if key == Keyboard.UP:
+        if speed[LEFT] < MAX_SPEED:
+            speed[LEFT] += SPEED_INCREMENT
+        if speed[RIGHT] < MAX_SPEED:
+            speed[RIGHT] += SPEED_INCREMENT
+    if key == Keyboard.DOWN:
+        if speed[LEFT] > -MAX_SPEED:
+            speed[LEFT] -= SPEED_INCREMENT
+        if speed[RIGHT] > -MAX_SPEED:
+            speed[RIGHT] -= SPEED_INCREMENT
+
+    if key == Keyboard.LEFT:
+        if speed[LEFT] > -MAX_SPEED:
+            speed[LEFT] -= SPEED_INCREMENT
+        if speed[RIGHT] < MAX_SPEED:
+            speed[RIGHT] += SPEED_INCREMENT
+    if key == Keyboard.RIGHT:
+        if speed[LEFT] < MAX_SPEED:
+            speed[LEFT] += SPEED_INCREMENT
+        if speed[RIGHT] > -MAX_SPEED:
+            speed[RIGHT] -= SPEED_INCREMENT
+
+    # send updated speed values to motors
+    set_speed()
+    return
+
+# Display
 def world_coords_to_display_cords(x, y):
     # convert world coordinates to display coordinates
     # in the environment, x is right, y is up, whereas on the display, x is right, y is down
@@ -185,7 +186,7 @@ def clean_display():
     return
 
 
-# MAIN LOOP
+# ---------- MAIN LOOP ----------
 # Perform simulation steps until controller is stopped
 while robot.step(timestep) != -1:
     # Poll sensors
