@@ -9,10 +9,11 @@ from controller import Keyboard # for driving in the "explore" phase
 
 # CONSTANTS
 SPEED_UNIT = 0.00628
-MAX_SPEED = 200 # can actually go to a maximum of 1000
+MAX_SPEED = 200 # can go to a maximum of 1000. Speed limit helps keep motion of epuck smooth
 SPEED_INCREMENT = 4
 LEFT = 0 # used to refer to the left wheel's motor in the speed
 RIGHT = 1
+PIXELS_PER_METRE = 100 # ratio of pixels per metre - i.e. 1 pixels corresponds to 1cm
 
 
 # VARIABLES & DATA STRUCTURES
@@ -53,19 +54,32 @@ translation = epuck_node.getField('translation')
 rotation = epuck_node.getField('rotation')
 
 
+# get display
+display = robot.getDevice('display')
+display_width = display.getWidth()
+display_height = display.getHeight()
+
+# visualise the epuck's x-y origin (0,0) in the centre of the display
+display_origin_x = display_width / 2
+display_origin_y = display_height / 2
+
+
 # FUNCTIONS
+# Convenience
+# EKF-SLAM
+# Display
 def set_speed():
     # update motors with value in speed list
     left_motor.setVelocity(SPEED_UNIT * speed[LEFT])
     right_motor.setVelocity(SPEED_UNIT * speed[RIGHT])
     return
 
-def radToDeg(rads):
+def rad_to_deg(rads):
     # convenience function
     degs = rads * (180.0 / np.pi)
     return degs
 
-def degToRad(degs):
+def deg_to_rad(degs):
     # convenience function
     rads = degs * (np.pi / 180.0)
     return rads
@@ -116,8 +130,8 @@ def get_pose():
     # rot_axis_x and rot_axis_y will be close to 0, and rot_axis_z will be close to 1, as the epuck will be rotating about the vertical axis
     rot_axis_x, rot_axis_y, rot_axis_z, theta = rotation.getSFRotation()
 
-    # heading (relative to $ x $ axis) is in radians, and want it in degrees
-    x_k[2] = radToDeg(theta)
+    # heading (relative to $ x $ axis) is in radians
+    x_k[2] = theta
     return
 
 def get_control():
@@ -140,6 +154,36 @@ def get_control():
     u_k[1] = vz
     return
 
+def world_coords_to_display_cords(x, y):
+    # convert world coordinates to display coordinates
+    # in the environment, x is right, y is up, whereas on the display, x is right, y is down
+    display_x = int(display_origin_x + x * PIXELS_PER_METRE)
+    display_y = int(display_origin_y - y * PIXELS_PER_METRE) # subtract because of display y direction being opposite to world y direction
+
+    return display_x, display_y
+
+def draw_pose():
+    # pose is stored in x_k = [x_coord, y_coord, theta]
+
+    # draw epuck body
+    display.setColor(0x1026cc)
+    epuck_radius = 0.037 * PIXELS_PER_METRE # epuck has 7.4cm diameter => 0.037m radius
+    display_x, display_y = world_coords_to_display_cords(x_k[0], x_k[1]) # convert world coordinates to display coordinates
+    display.fillOval(display_x, display_y, epuck_radius, epuck_radius)
+
+    # draw heading of epuck
+    heading_x = display_x + (int(epuck_radius * np.cos(x_k[2])))
+    heading_y = display_y - (int(epuck_radius * np.sin(x_k[2])))
+    display.setColor(0xe01fb3)
+    display.drawLine(int(display_x), int(display_y), int(heading_x), int(heading_y))
+    return
+
+def clean_display():
+    # removes anything not explicitly drawn this time-step on the display
+    display.setColor(0xffffff)  # make display background white
+    display.fillRectangle(0, 0, display_width, display_height)
+    return
+
 
 # MAIN LOOP
 # Perform simulation steps until controller is stopped
@@ -150,8 +194,13 @@ while robot.step(timestep) != -1:
 
     # Process sensor data
     # Actuate
-
     drive_logic()
+
+    # ---------------------------------
+
+    # Update display
+    clean_display()
+    draw_pose()
 
     pass
 
