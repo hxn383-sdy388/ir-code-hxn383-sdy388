@@ -152,13 +152,14 @@ def time_update():
 
     # matrix components
     # because of numerical stability issues, need to handle case where angular velocity is near zero
-    if u_t[1] > 0.0001:
+    if np.abs(u_t[1]) > 0.0001:
         r = (u_t[0] / u_t[1])  # linear velocity / angular velocity
 
         motion_model_x = (-1 * r * (np.sin(old_theta))) + (r * np.sin(old_theta + delta_theta))
         motion_model_y = (r * (np.cos(old_theta))) - (r * np.cos(old_theta + delta_theta))
         motion_model_theta = delta_theta
     else:
+        # angle near zero, model as only linear movement
         motion_model_x = u_t[0] * np.cos(old_theta) * dt
         motion_model_y = u_t[0] * np.sin(old_theta) * dt
         motion_model_theta = 0.0 # angular velocity tends to zero, so heading assumed to not change
