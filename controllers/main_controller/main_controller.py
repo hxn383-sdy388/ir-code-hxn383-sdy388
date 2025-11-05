@@ -18,8 +18,30 @@ PIXELS_PER_METRE = 100 # ratio of pixels per metre - i.e. 1 pixels corresponds t
 
 # ---------- VARIABLES & DATA STRUCTURES ----------
 speed = [0,0] # list for controlling the speed - done this way control speed using encoder steps rather than target velocity directly
-x_k = [0,0,0] # list for storing pose at current time $ k $, in the format [$ x $, $ y $, $ \theta $]
-u_k = [0,0] # list for storing the control applied at time $ k - 1 $ to drive the epuck to pose $ \vec{x}_k $ at time $ k $. Elements: linear velocity, angular velocity
+x_t = [0,0,0] # list for storing pose at current time $ t $, in the format [$ x $, $ y $, $ \theta $]
+u_t = [0,0] # list for storing the control applied at time $ t - 1 $ to drive the epuck to pose $ \vec{x}_t $ at time $ t $. Elements: linear velocity, angular velocity
+landmarks = [(-0.25,0.25), (0.25,0.25), (-0.25,-0.25), (0.25,-0.25)]
+
+'''
+Probabilistic Robotics defines the combined state vector as a the vector of the robot's pose and (x,y) coordinates of all landmarks.
+The coordinates of each of these landmarks is assumed to remain constant throughout simulation.
+
+The purpose of the matrix f_x is for the state estimate to be updated, manipulating only the entries corresponding to the robot's pose, leaving entries corresponding to landmarks unchanged.
+
+The matrix is initialised as a horizontally stacked (3 x 3) identity matrix, and a (3 x 2n) matrix, where n is the number of landmarks. 
+'''
+f_x = np.hstack((np.eye(3), np.zeros((3, 2 * len(landmarks)))))
+
+'''
+The state estimate vector, notated in Probabilistic Robotics as $ u_t $, is a vector containing first elements of the epuck's pose, and then elements for all the (x,y) coordinates of all landmarks.
+
+The state estimate corresponds to the mean of the multivariate gaussian being used to model the uncertainty in our belief over pose and landmark positions - ie. the best guess to where the robot is (based on its pose and surrounding landmarks).
+
+The vector is initialised as a column vector with (3 + 2n) elements, where n is the number of landmarks.
+
+The values of the vector are initialised with zero, as the initial pose is arbitrarily taken as the origin, and none of the landmark locations are known initially.
+'''
+state_estimate = np.zeros((3 + 2 * len(landmarks), 1))
 
 
 # ---------- SETUP ----------
@@ -68,28 +90,28 @@ display_origin_y = display_height / 2
 # EKF-SLAM
 def get_pose():
     # goal:
-    #   - return a vector $ x_k $ which represents the e-puck pose at the current time step $ k $
+    #   - return a vector $ x_t $ which represents the e-puck pose at the current time step $ t $
     #   - the pose consists of an $ x $ coordinate, a $ z $ coordinate, and a heading $ \theta $
     #       - $ \theta $ is taken as the angle in degrees above the $ x $ axis
     #   - the $ z $ coordinate has been omitted from the pose, as it has been decided to constrain the e-puck to flat surfaces (i.e. $ z = 0 $) for scope management
 
     # get absolute position
     x , y , z = translation.getSFVec3f()
-    x_k[0] = x
-    x_k[1] = y
+    x_t[0] = x
+    x_t[1] = y
 
     # get orientation
     # rot_axis_x and rot_axis_y will be close to 0, and rot_axis_z will be close to 1, as the epuck will be rotating about the vertical axis
     rot_axis_x, rot_axis_y, rot_axis_z, theta = rotation.getSFRotation()
 
     # heading (relative to $ x $ axis) is in radians
-    x_k[2] = theta
+    x_t[2] = theta
     return
 
 def get_control():
     # goal:
-    #   - populate the control vector $ \vec{u}_k $
-    #   - this should be the control applied to the epuck at time $ k - 1 $ to yield the epuck being at state $ \vec{x}_k $ at current time $ k $
+    #   - populate the control vector $ \vec{u}_t $
+    #   - this should be the control applied to the epuck at time $ t - 1 $ to yield the epuck being at state $ \vec{x}_t $ at current time $ t $
 
     # get the velocity from the epuck
     velocity = epuck_node.getVelocity()
@@ -99,11 +121,34 @@ def get_control():
 
     # linear (ie. straight line) velocity is the norm of the vector formed of x and y velocities
     # linear velocity is in metres/second
-    u_k[0] = np.sqrt(vx ** 2 + vy ** 2)
+    u_t[0] = np.sqrt(vx ** 2 + vy ** 2)
 
     # angular velocity ($ \omega $) is the velocity of rotation about the z (vertical) axis
     # therefore, angular velocity is in radians/second
-    u_k[1] = vz
+    u_t[1] = vz
+    return
+
+def time_update():
+    # TODO
+    # line 3 prob robotics (ekf slam known correspondences)
+    # update the state estimate: $ \bar{u}_t $
+    # intuition - take the best state estimate from the previous time step, and based on the control $ \vec{u}_t $, update the state estimate for this time step
+
+    # need to calculate how the epuck's pose will have changed between the last time step $ t - 1 $ and now $ t $
+    # the motion model for the epuck will be based on that it's moving with both a value for linear velocity and angular velocity
+    # hence, for the time step, it has moved on a circular arc of radius R = linear velocity / angular velocity, centered about the ICC (Instantaneous Centre of Curvature)
+    # following through the trig (using a diagram on differential drive robots from Dudek and Jenkin, Computational Principles of Mobile Robotics) this gives that:
+    #   the location of the ICC relative to the centre of the robot (x,y) is $ x_{t-1} - R \sin \theta $ for the x coord, and $ y_{t-1} + R \cos \theta $ for the y coord
+    #   therefore, we can get the updated pose of the epuck with:
+    #       $ x_t = x_{t-1} - R \sin(\theta_{t-1}) + R \sin(\theta_{t-1} + \delta \theta) $  ie. the x coord is the x coord of the ICC sum the x distance between the ICC and centre of the epuck after it's heading has changed by $ \delta \theta $
+    #       $ y_t = y_{t-1} + R \cos(\theta_{t-1}) - R \cost(\theta_{t-1} + \delta \theta) $  ie. the y coord is the y coord of the ICC sum the y distance between the ICC and the centre of the epuck after it's heading has changed by $ \delta \theta $
+    #       $ \theta_t = \theta_{t-1} + \delta \theta $  ie. the heading of the epuck is it's old heading sum the change in heading
+    #   substituting in that R = linear velocity / angular velocity, gives us the matrix below:
+
+    return
+
+def observation_update():
+    # TODO
     return
 
 # Convenience
@@ -169,14 +214,23 @@ def draw_pose():
     # draw epuck body
     display.setColor(0x1026cc)
     epuck_radius = 0.037 * PIXELS_PER_METRE # epuck has 7.4cm diameter => 0.037m radius
-    display_x, display_y = world_coords_to_display_cords(x_k[0], x_k[1]) # convert world coordinates to display coordinates
+    display_x, display_y = world_coords_to_display_cords(x_t[0], x_t[1]) # convert world coordinates to display coordinates
     display.fillOval(display_x, display_y, epuck_radius, epuck_radius)
 
     # draw heading of epuck
-    heading_x = display_x + (int(epuck_radius * np.cos(x_k[2])))
-    heading_y = display_y - (int(epuck_radius * np.sin(x_k[2])))
+    heading_x = display_x + (int(epuck_radius * np.cos(x_t[2])))
+    heading_y = display_y - (int(epuck_radius * np.sin(x_t[2])))
     display.setColor(0xe01fb3)
     display.drawLine(int(display_x), int(display_y), int(heading_x), int(heading_y))
+    return
+
+def temp_draw_landmarks():
+    # temporary function, until landmarks implemented in environment
+
+    for x, y in landmarks:
+        display.setColor(0x3d3527)
+        display_x, display_y = world_coords_to_display_cords(x, y)  # convert world coordinates to display coordinates
+        display.fillOval(display_x, display_y, 1, 1)
     return
 
 def clean_display():
@@ -202,6 +256,7 @@ while robot.step(timestep) != -1:
     # Update display
     clean_display()
     draw_pose()
+    temp_draw_landmarks()
 
     pass
 
