@@ -125,7 +125,7 @@ def get_control():
 
     # angular velocity ($ \omega $) is the velocity of rotation about the z (vertical) axis
     # therefore, angular velocity is in radians/second
-    u_t[1] = vz
+    u_t[1] = wz
     return
 
 def time_update():
