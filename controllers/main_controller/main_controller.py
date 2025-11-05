@@ -145,7 +145,38 @@ def time_update():
     #       $ \theta_t = \theta_{t-1} + \delta \theta $  ie. the heading of the epuck is it's old heading sum the change in heading
     #   substituting in that R = linear velocity / angular velocity, gives us the matrix below:
 
-    return
+    # helper variables
+    dt = timestep / 1000 # timestep is in miliseconds, want in seconds
+    old_theta = state_estimate[2,0] # theta is 3'rd element of vector - need to get it from column zero, as it's implemented as a matrix
+    delta_theta = u_t[1] * dt # ie. change in angle is angular velocity multiplied by change in time
+
+    # matrix components
+    # because of numerical stability issues, need to handle case where angular velocity is near zero
+    if u_t[1] > 0.0001:
+        r = (u_t[0] / u_t[1])  # linear velocity / angular velocity
+
+        motion_model_x = (-1 * r * (np.sin(old_theta))) + (r * np.sin(old_theta + delta_theta))
+        motion_model_y = (r * (np.cos(old_theta))) - (r * np.cos(old_theta + delta_theta))
+        motion_model_theta = delta_theta
+    else:
+        motion_model_x = u_t[0] * np.cos(old_theta) * dt
+        motion_model_y = u_t[0] * np.sin(old_theta) * dt
+        motion_model_theta = 0.0 # angular velocity tends to zero, so heading assumed to not change
+
+    # matrix construction
+    motion_model_matrix = np.array([[float(motion_model_x)], [float(motion_model_y)], [float(motion_model_theta)]]) # 3x1 matrix
+
+    # apply the motion model to update the state estimate
+    updated_state_est = state_estimate + np.dot(f_x.T, motion_model_matrix)
+
+    print(f"actual pose = {x_t}")
+    print(f"actual control = {u_t}")
+    print(f"old state est: {state_estimate} \n new state est: {updated_state_est} \n")
+    print(f"motion model x: {motion_model_x}")
+    print(f"motion model y: {motion_model_y}")
+    print(f"motion model theta: {motion_model_theta} \n\n\n")
+
+    return updated_state_est
 
 def observation_update():
     # TODO
@@ -248,6 +279,11 @@ while robot.step(timestep) != -1:
     get_control()
 
     # Process sensor data
+    state_estimate = time_update()
+
+
+    # get_control()
+
     # Actuate
     drive_logic()
 
