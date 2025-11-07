@@ -209,7 +209,7 @@ def time_update():
 
     # Line 4 defines $ G_t $ - an auxiliary matrix constructed by taking the Jacobian of the state model, where the only non-zero elements are the first derivatives of the x and y motion model components w.r.t theta
     # ie. The non-zero elements model how the x and y coords of the epuck are changing
-    # There is a differentiation error in the textbook where both elements are off by a factor of -1, which has been corrected in this implementation
+    # There is a differentiation error in the version of the book that I had access to, where both elements are off by a factor of -1, which has been corrected in this implementation
     # Again, as working with dividing by the angular velocity again, need to handle the case where the angular velocity tends to 0
     if np.abs(u_t[1]) > 0.0001:
         r = (u_t[0] / u_t[1])  # linear velocity / angular velocity
@@ -290,7 +290,7 @@ def observation_update(state_estimate_bar, covariance_bar):
         f_xj[3:,3 + (2 * correspondence) - 2:3 + (2 * correspondence) - 2+3] = np.eye(3)
 
         # line 16
-        # note that in Table 10.1 of Probabilistic Robotics, there's several elements of the matrix that are off by a factor of -1. This has been corrected in this implementation
+        # note that in Table 10.1 of Probabilistic Robotics - at least in the version of the book that I had access to - there's several elements of the matrix that are off by a factor of -1. This has been corrected in this implementation
         # where h is the measurement model:
         h_jacobian_r_line = np.array([[-1 * delta_x * np.sqrt(q)], [-1 * delta_y * np.sqrt(q)], [0], [delta_x * np.sqrt(q)], [delta_y * np.sqrt(q)], [0]])
         h_jacobian_phi_line = np.array([[delta_y], [-1 * delta_x], [-1], [-1 * delta_y], [delta_x], [0]])
@@ -450,7 +450,7 @@ while robot.step(timestep) != -1:
     print(f"covariance: {covariance}")
     print("\n\n")
 
-    
+
     # Actuate
     drive_logic()
 
