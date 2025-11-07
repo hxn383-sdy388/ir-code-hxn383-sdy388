@@ -21,6 +21,7 @@ speed = [0,0] # list for controlling the speed - done this way control speed usi
 x_t = [0,0,0] # list for storing pose at current time $ t $, in the format [$ x $, $ y $, $ \theta $]
 u_t = [0,0] # list for storing the control applied at time $ t - 1 $ to drive the epuck to pose $ \vec{x}_t $ at time $ t $. Elements: linear velocity, angular velocity
 landmarks = [(-0.25,0.25), (0.25,0.25), (-0.25,-0.25), (0.25,-0.25)]
+z_t = [] # list for landmark measurements, where each element is of the form (distance, bearing from epuck, correspondence)
 
 '''
 Probabilistic Robotics defines the combined state vector as a the vector of the robot's pose and (x,y) coordinates of all landmarks.
@@ -63,6 +64,7 @@ ie. if the first diagonal element was set to 1, this would correspond to an addi
 '''
 noise = np.diag([0.00001,0.00001,0.00001]) # experimenting with some simulated noise
 # noise = np.zeros((3,3)) # matrix of zeros as using supervisor, so we have certainty
+
 
 # ---------- SETUP ----------
 # create the Robot instance
@@ -234,6 +236,26 @@ def observation_update():
     # TODO
     return
 
+def temp_measure_landmarks():
+    z = [] # measurements
+    index = 0 # iterator index so correspondences are known
+
+    # consider each landmark
+    for landmark in landmarks:
+        # get distance between epuck (ie. current pose) and landmark
+        distance = np.sqrt(np.square((landmark[0] - x_t[0])) + np.square((landmark[1] - x_t[1])))
+        # check whether it's within the epuck's fov - 0.84 radians
+        alpha = np.arctan2(landmark[1] - x_t[1], landmark[0] - x_t[0]) - x_t[2] # in this case, opposite is delta y, and adjacent is delta x
+        if np.abs(alpha) < 0.42 and distance < 0.06: # Wks 1-4 lab handout says epuck camera can see about 5.5cm in front of it
+            # each measurement takes the form of: distance to landmark, relative angle from epuck heading to landmark, correspondence of landmark (as per Probabilistic Robotics Table 10.1)
+            z.append((distance, alpha, index))
+            # print(f"landmark measured: distance: {distance}, alpha: {rad_to_deg(alpha)}, index: {index}")
+
+        index += 1 # increment index to keep correspondences correct
+
+    return z
+
+
 # Convenience
 def rad_to_deg(rads):
     # convenience function
@@ -329,6 +351,7 @@ while robot.step(timestep) != -1:
     # Poll sensors
     get_pose()
     get_control()
+    z_t = temp_measure_landmarks()
 
     # Process sensor data
     state_estimate, covariance = time_update()
