@@ -20,7 +20,7 @@ PIXELS_PER_METRE = 100 # ratio of pixels per metre - i.e. 1 pixels corresponds t
 speed = [0,0] # list for controlling the speed - done this way control speed using encoder steps rather than target velocity directly
 x_t = [0,0,0] # list for storing pose at current time $ t $, in the format [$ x $, $ y $, $ \theta $]
 u_t = [0,0] # list for storing the control applied at time $ t - 1 $ to drive the epuck to pose $ \vec{x}_t $ at time $ t $. Elements: linear velocity, angular velocity
-landmarks = [(-0.25,0.25), (0.25,0.25), (-0.25,-0.25), (0.25,-0.25)]
+landmarks = [(-0.25,0.25,0), (0.25,0.25,0), (-0.25,-0.25,0), (0.25,-0.25,0)] # signatures added as 0
 z_t = [] # list for landmark measurements, where each element is of the form (distance, bearing from epuck, correspondence)
 
 '''
@@ -29,23 +29,26 @@ The coordinates of each of these landmarks is assumed to remain constant through
 
 The purpose of the matrix f_x is for the state estimate to be updated, manipulating only the entries corresponding to the robot's pose, leaving entries corresponding to landmarks unchanged.
 
-The matrix is initialised as a horizontally stacked (3 x 3) identity matrix, and a (3 x 2n) matrix, where n is the number of landmarks. 
+The matrix is initialised as a horizontally stacked (3 x 3) identity matrix, and a (3 x 3n) matrix, where n is the number of landmarks. 
 '''
-f_x = np.hstack((np.eye(3), np.zeros((3, 2 * len(landmarks)))))
+f_x = np.hstack((np.eye(3), np.zeros((3, 3 * len(landmarks)))))
 
 '''
 The state estimate vector, notated in Probabilistic Robotics as $ u_t $, is a vector containing first elements of the epuck's pose, and then elements for all the (x,y) coordinates of all landmarks.
 
 The state estimate corresponds to the mean of the multivariate gaussian being used to model the uncertainty in our belief over pose and landmark positions - ie. the best guess to where the robot is (based on its pose and surrounding landmarks).
 
-The vector is initialised as a column vector with (3 + 2n) elements, where n is the number of landmarks.
+The vector is initialised as a column vector with (3 + 3n) elements, where n is the number of landmarks.
 
-The values of the vector are initialised with zero, as the initial pose is arbitrarily taken as the origin, and none of the landmark locations are known initially.
+# The values of the vector are initialised with zero, as the initial pose is arbitrarily taken as the origin, and none of the landmark locations are known initially.
+
+The landmark location elements have been initialised as nan's so that it can be ascertained whether they've been seen before. (nan indicates landmark has not been seen yet).
 '''
-state_estimate = np.zeros((3 + 2 * len(landmarks), 1))
+state_estimate = np.full((3 + 3 * len(landmarks), 1), np.nan)
+state_estimate[0:3] = [0] # correct the pose elements back to way described above
 
 '''
-The covariance matrix is a square matrix of size (3 + 2n) x (3 + 2n), on which the diagonal elements are initialised to a large value, as the initial positions of the landmarks are unknown.
+The covariance matrix is a square matrix of size (3 + 3n) x (3 + 3n), on which the diagonal elements are initialised to a large value, as the initial positions of the landmarks are unknown.
 Note that in Probabilistic Robots, infinity is used for these values, but instead a relatively large finite value is used here due to computational issues encountered when using infinity.
 
 The diagonal elements correspond to the variances of the uncertainty in x, y, theta, and positions of the landmarks. The elements beyond the first 3 diagonal entries are set to relatively large finite values, as explained above, as initial landmark positions are unknown. 
@@ -53,7 +56,7 @@ The off-diagonal elements correspond to the correlations, which are initialised 
 
 Zeros are filled in on the first three diagonal elements for the epuck's pose, consistent with the initialisation outlined in Probabilistic Robotics.
 '''
-covariance = np.zeros((3 + 2 * len(landmarks), 3 + 2 * len(landmarks)))
+covariance = np.zeros((3 + 3 * len(landmarks), 3 + 3 * len(landmarks)))
 np.fill_diagonal(covariance, 100)
 covariance[:3, :3] = 0 # state uncertainty for epuck - assume known position initially
 
@@ -248,13 +251,12 @@ def temp_measure_landmarks():
         alpha = np.arctan2(landmark[1] - x_t[1], landmark[0] - x_t[0]) - x_t[2] # in this case, opposite is delta y, and adjacent is delta x
         if np.abs(alpha) < 0.42 and distance < 0.06: # Wks 1-4 lab handout says epuck camera can see about 5.5cm in front of it
             # each measurement takes the form of: distance to landmark, relative angle from epuck heading to landmark, correspondence of landmark (as per Probabilistic Robotics Table 10.1)
-            z.append((distance, alpha, index))
+            z.append(((distance, alpha, 0), index)) # add 0 as the signature
             # print(f"landmark measured: distance: {distance}, alpha: {rad_to_deg(alpha)}, index: {index}")
 
         index += 1 # increment index to keep correspondences correct
 
     return z
-
 
 # Convenience
 def rad_to_deg(rads):
@@ -332,7 +334,7 @@ def draw_pose():
 def temp_draw_landmarks():
     # temporary function, until landmarks implemented in environment
 
-    for x, y in landmarks:
+    for x, y, signature in landmarks:
         display.setColor(0x3d3527)
         display_x, display_y = world_coords_to_display_cords(x, y)  # convert world coordinates to display coordinates
         display.fillOval(display_x, display_y, 1, 1)
