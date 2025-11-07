@@ -43,6 +43,26 @@ The values of the vector are initialised with zero, as the initial pose is arbit
 '''
 state_estimate = np.zeros((3 + 2 * len(landmarks), 1))
 
+'''
+The covariance matrix is a square matrix of size (3 + 2n) x (3 + 2n), on which the diagonal elements are initialised to a large value, as the initial positions of the landmarks are unknown.
+Note that in Probabilistic Robots, infinity is used for these values, but instead a relatively large finite value is used here due to computational issues encountered when using infinity.
+
+The diagonal elements correspond to the variances of the uncertainty in x, y, theta, and positions of the landmarks. The elements beyond the first 3 diagonal entries are set to relatively large finite values, as explained above, as initial landmark positions are unknown. 
+The off-diagonal elements correspond to the correlations, which are initialised as zero so as to not assume correlation between variables, where these elements are updated by the EKF in the prediction and correction steps.
+
+Zeros are filled in on the first three diagonal elements for the epuck's pose, consistent with the initialisation outlined in Probabilistic Robotics.
+'''
+covariance = np.zeros((3 + 2 * len(landmarks), 3 + 2 * len(landmarks)))
+np.fill_diagonal(covariance, 100)
+covariance[:3, :3] = 0 # state uncertainty for epuck - assume known position initially
+
+'''
+The noise matrix is a diagonal matrix on which the elements are the covariance of random noise added to the state uncertainty at every prediction step.
+
+ie. if the first diagonal element was set to 1, this would correspond to an addition of 1 metre's worth of uncertainty in the x coordinate of the epuck's pose per timestep.
+'''
+noise = np.diag([0.00001,0.00001,0.00001]) # experimenting with some simulated noise
+# noise = np.zeros((3,3)) # matrix of zeros as using supervisor, so we have certainty
 
 # ---------- SETUP ----------
 # create the Robot instance
@@ -170,14 +190,45 @@ def time_update():
     # apply the motion model to update the state estimate
     updated_state_est = state_estimate + np.dot(f_x.T, motion_model_matrix)
 
-    print(f"actual pose = {x_t}")
-    print(f"actual control = {u_t}")
-    print(f"old state est: {state_estimate} \n new state est: {updated_state_est} \n")
-    print(f"motion model x: {motion_model_x}")
-    print(f"motion model y: {motion_model_y}")
-    print(f"motion model theta: {motion_model_theta} \n\n\n")
+    # print(f"actual pose = {x_t}")
+    # print(f"actual control = {u_t}")
+    # print(f"old state est: {state_estimate} \n new state est: {updated_state_est} \n")
+    # print(f"motion model x: {motion_model_x}")
+    # print(f"motion model y: {motion_model_y}")
+    # print(f"motion model theta: {motion_model_theta} \n\n\n")
 
-    return updated_state_est
+
+    # Note that Probabilistic robotics termed $ y_t $ as the combined state vector - ie. the pose and landmarks
+    # Lines 4 and 5 of the textbook algorithm are responsible for updating the state uncertainty with respect to the motion model and random noise
+
+    # Line 4 defines $ G_t $ - an auxiliary matrix constructed by taking the Jacobian of the state model, where the only non-zero elements are the first derivatives of the x and y motion model components w.r.t theta
+    # ie. The non-zero elements model how the x and y coords of the epuck are changing
+    # There is a differentiation error in the textbook where both elements are off by a factor of -1, which has been corrected in this implementation
+    # Again, as working with dividing by the angular velocity again, need to handle the case where the angular velocity tends to 0
+    if np.abs(u_t[1]) > 0.0001:
+        r = (u_t[0] / u_t[1])  # linear velocity / angular velocity
+
+        first_deriv_x = (-1 * r * (np.cos(old_theta))) + (r * np.cos(old_theta + delta_theta)) # derivative w.r.t theta
+        first_deriv_y = (-1 * r * (np.sin(old_theta))) + (r * np.sin(old_theta + delta_theta)) # derivative w.r.t theta
+    else:
+        # angle near zero, model as only linear movement
+        first_deriv_x = -1 * u_t[0] * np.sin(old_theta) * dt
+        first_deriv_y = u_t[0] * np.cos(old_theta) * dt
+
+    # construct the matrix with derivatives of the motion model w.r.t the epuck's pose
+    jacobian_wrt_pose = np.zeros((3,3))
+    jacobian_wrt_pose[0,2] = first_deriv_x
+    jacobian_wrt_pose[1,2] = first_deriv_y
+
+    # construct the matrix that embeds this in the space represented by the combined state vector, rather than just the pose
+    jacobian_wrt_combined_state_vector = np.eye((f_x.shape[1])) + np.dot(np.dot(f_x.transpose(), jacobian_wrt_pose), f_x)
+
+    # line 5
+    # Use the auxiliary matrix to update the covariance matrix from the previous covariance, plus some noise from a random variable that's added to the state each prediction update
+    updated_covariance = np.dot(np.dot(jacobian_wrt_combined_state_vector, covariance), jacobian_wrt_combined_state_vector.transpose()) + np.dot(np.dot(f_x.transpose(), noise), f_x)
+
+
+    return updated_state_est, updated_covariance
 
 def observation_update():
     # TODO
@@ -280,8 +331,7 @@ while robot.step(timestep) != -1:
     get_control()
 
     # Process sensor data
-    state_estimate = time_update()
-
+    state_estimate, covariance = time_update()
 
     # get_control()
 
