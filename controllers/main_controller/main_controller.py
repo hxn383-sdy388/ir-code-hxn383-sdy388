@@ -68,6 +68,8 @@ ie. if the first diagonal element was set to 1, this would correspond to an addi
 noise = np.diag([0.00001,0.00001,0.00001]) # experimenting with some simulated noise
 # noise = np.zeros((3,3)) # matrix of zeros as using supervisor, so we have certainty
 
+Q = np.diag([0.0001,0.0001, 0]) # units for the first two elements are metres - ie. each of these are just distances - ie. for given range and relative bearing measurements, how far off are the actual range and bearing (and signature - but that's expected to be zero in the current configuration) measurements expected to be. Currently experimenting with small noise values
+
 
 # ---------- SETUP ----------
 # create the Robot instance
@@ -154,7 +156,6 @@ def get_control():
     return
 
 def time_update():
-    # TODO
     # line 3 prob robotics (ekf slam known correspondences)
     # update the state estimate: $ \bar{u}_t $
     # intuition - take the best state estimate from the previous time step, and based on the control $ \vec{u}_t $, update the state estimate for this time step
@@ -235,9 +236,95 @@ def time_update():
 
     return updated_state_est, updated_covariance
 
-def observation_update():
-    # TODO
-    return
+def observation_update(state_estimate_bar, covariance_bar):
+    # Goal is to use the measurements to inform the state estimate (of both epuck pose and landmark positions) and inform uncertainties around the epuck's pose and landmark positions
+
+    # line 7 and beyond prob robotics (ekf slam known correspondences)
+    # define lists that accumulate relevant matrices from within the for-loop, that are required outside of it
+    measurement_deltas = []
+    measurement_jacobians = []
+    kalman_gains = []
+
+    # iterate through all the landmark measurements
+    # Probabilistic Robotics takes the relative bearing between the robot's heading theta and the landmark as phi - when calculating it, I denoted it as alpha
+    # Probabilistic robotics refers to the iterator variable j as the index of the landmark in the list of landmarks - I denoted it as "correspondence". This version of the algorithm assumes this to be known for each measurement
+    # distance is the range between the landmark observed and the epuck
+    # signature is treated as 0 at the moment
+    #   - Probabilistic Robotics explains that a feature extractor may generate a signature, which is assumed to be a numerical value - the example they give is average colour
+    #   - the signature is treated as 0 at the moment as it has not been implemented to any significance
+    for ((distance, alpha, signature), correspondence) in z_t:
+        measurement = (distance, alpha, signature) # re-pack so vector can be used later for getting the delta between the actual measurement and the expected measurement
+
+        landmark_estimate = state_estimate_bar[3 + (3 * correspondence) : 3 + (3 * correspondence) + 3] # estimated x and y coords of landmark
+
+        # lines 9 & 10
+        # landmark x,y coordinates were initialised to nan to distinguish whether landmark has been seen before
+        # ie. nan -> not seen before
+        if np.isnan(landmark_estimate[0]):
+            # landmark hasn't been seen before
+            # hence, take its position relative to the current estimated pose of the epuck
+
+            # third element of the state estimate is theta, which isn't relevant here - instead the third element should be the signature (taken as 0 for now), hence why the first term slices only [0:2] of state_estimate
+            landmark_estimate = np.array([state_estimate_bar[0], state_estimate_bar[1], [0]]) + (distance *  np.array([[np.cos(alpha + state_estimate_bar[2,0])], [np.sin(alpha + state_estimate_bar[2,0])], [signature]]))
+            state_estimate_bar[3 + (3 * correspondence): 3 + (3 * correspondence) + 3] = landmark_estimate # write back into the state estimate vector (the version passed in to this function from the time update step, not the global one)
+
+
+        # lines 12 and 13
+        # helper variables for the x and y displacement between the epuck and current landmark
+        delta_x = landmark_estimate[0,0] - state_estimate_bar[0,0]
+        delta_y = landmark_estimate[1,0] - state_estimate_bar[1,0]
+        delta = np.array([delta_x, delta_y])
+
+        q = np.dot(np.transpose(delta), delta) # squared distance between epuck and current landmark
+
+        # line 14
+        # estimate the measurement using the measurement model
+        # ie. what is the expected value of the measurement of the landmark, which is compared to the actual measured value in section that implements line 19
+        # the estimated measurement is constructed of the distance (sqrt q), the relative heading, and the signature variable
+        estimated_measurement = np.array([[np.sqrt(q)], [np.atan2(delta_y, delta_x) - state_estimate_bar[2,0]], landmark_estimate[2]])
+
+        # line 15
+        # matrix used to apply the jacobian of the measurement model w.r.t the combined state vector to only the elements that correspond to the epuck pose and current landmark
+        f_xj = np.zeros((6, 3 + 3 * len(landmarks)))
+        f_xj[:3,:3] = np.eye(3)
+        f_xj[3:,3 + (2 * correspondence) - 2:3 + (2 * correspondence) - 2+3] = np.eye(3)
+
+        # line 16
+        # note that in Table 10.1 of Probabilistic Robotics, there's several elements of the matrix that are off by a factor of -1. This has been corrected in this implementation
+        # where h is the measurement model:
+        h_jacobian_r_line = np.array([[-1 * delta_x * np.sqrt(q)], [-1 * delta_y * np.sqrt(q)], [0], [delta_x * np.sqrt(q)], [delta_y * np.sqrt(q)], [0]])
+        h_jacobian_phi_line = np.array([[delta_y], [-1 * delta_x], [-1], [-1 * delta_y], [delta_x], [0]])
+        h_jacobian_signature_line = np.array([[0], [0], [0], [0], [0], [1]])
+
+        h_jacobian = np.vstack([
+            np.transpose(h_jacobian_r_line),
+            np.transpose(h_jacobian_phi_line),
+            np.transpose(h_jacobian_signature_line)
+        ])
+
+        h_jacobian = (1 / q) * np.dot(h_jacobian, f_xj)
+
+        # line 17
+        # Q - noise parameters - for a given range & bearing (& signature) measurement, how far off is it expected to be from the true measurement
+        k_t = np.dot(np.dot(covariance_bar, np.transpose(h_jacobian)),  np.linalg.inv(np.dot(h_jacobian, np.dot(covariance_bar, h_jacobian.transpose())) + Q))
+
+        # append relevant matrices to the lists outside the loop so that the updated state estimate and updated covariance can be calculated and returned
+        measurement_deltas.append(measurement - estimated_measurement)
+        measurement_jacobians.append(h_jacobian)
+        kalman_gains.append(k_t)
+
+    # (out of loop)
+    updated_covariance = covariance
+    updated_state_estimate = state_estimate_bar
+    if len(measurement_deltas) > 0:
+        intermediate_var = np.zeros(np.shape(np.dot(kalman_gains[0], measurement_jacobians[0])))
+        for i in range(1, len(measurement_deltas)):
+            updated_state_estimate += np.dot(kalman_gains[i], measurement_deltas[i]) # implements functionality on line 19 - updates state estimate
+            intermediate_var += np.dot(kalman_gains[i], measurement_jacobians[i])
+
+        updated_covariance = np.dot((np.eye(intermediate_var.shape[0]) - intermediate_var), covariance_bar) # implements functionality on line 20 - updates state uncertainty
+
+    return updated_state_estimate, updated_covariance
 
 def temp_measure_landmarks():
     z = [] # measurements
@@ -356,10 +443,14 @@ while robot.step(timestep) != -1:
     z_t = temp_measure_landmarks()
 
     # Process sensor data
-    state_estimate, covariance = time_update()
+    state_estimate_prime, covariance_prime = time_update()
+    state_estimate, covariance = observation_update(state_estimate_prime, covariance_prime)
 
-    # get_control()
+    print(f"state_estimate: {state_estimate}")
+    print(f"covariance: {covariance}")
+    print("\n\n")
 
+    
     # Actuate
     drive_logic()
 
