@@ -2,7 +2,7 @@
 
 # You may need to import some classes of the controller module. Ex:
 #  from controller import Robot, Motor, DistanceSensor
-from controller import Robot
+from controller import Robot, Motor
 
 # create the Robot instance.
 robot = Robot()
@@ -10,23 +10,72 @@ robot = Robot()
 # get the time step of the current world.
 timestep = int(robot.getBasicTimeStep())
 
-# You should insert a getDevice-like function in order to get the
-# instance of a device of the robot. Something like:
-#  motor = robot.getDevice('motorname')
-#  ds = robot.getDevice('dsname')
-#  ds.enable(timestep)
+# variables for each motor...
+right_motor = robot.getDevice('right wheel motor')
+left_motor = robot.getDevice('left wheel motor')
 
-# Main loop:
-# - perform simulation steps until Webots is stopping the controller
+# Set motors to velocity control mode
+left_motor.setPosition(float('inf'))
+right_motor.setPosition(float('inf'))
+
+# Stop all movement
+left_motor.setVelocity(0.0)
+right_motor.setVelocity(0.0)
+
+# Constant Global Variables...
+MAXIMUM_SPEED = 5 # rad/s
+TURNING_FACTOR = 0.5 # Assigned to half for now
+
+# Movement Functions - Follow prefixes
+# Move (m)
+# Turn (t)
+# Rotate (r)
+
+def stop():
+    left_motor.setVelocity(0)
+    right_motor.setVelocity(0)
+    
+def m_forward(s):
+    left_motor.setVelocity(s)
+    right_motor.setVelocity(s)
+
+def m_backward(s):
+    left_motor.setVelocity(-s)
+    right_motor.setVelocity(-s)
+
+def r_left(s): 
+    left_motor.setVelocity(-s)
+    right_motor.setVelocity(s)
+
+def r_right(s):
+    left_motor.setVelocity(s)
+    right_motor.setVelocity(-s)
+    
+def t_left(s):
+    left_motor.setVelocity(s * TURNING_FACTOR)
+    right_motor.setVelocity(s)
+
+def t_right(s):
+    left_motor.setVelocity(s)
+    right_motor.setVelocity(s * TURNING_FACTOR)
+    
+# Main loop: Testing Movement Functions
+count = 0
 while robot.step(timestep) != -1:
-    # Read the sensors:
-    # Enter here functions to read sensor data, like:
-    #  val = ds.getValue()
-
-    # Process sensor data here.
-
-    # Enter here functions to send actuator commands, like:
-    #  motor.setPosition(10.0)
-    pass
+    if count < 2000 / timestep:
+            m_forward(MAXIMUM_SPEED * 0.7)
+    elif count < 4500 / timestep:
+            t_right(MAXIMUM_SPEED * 0.8)
+    elif count < 7000 / timestep:
+            t_left(MAXIMUM_SPEED * 0.9)
+    elif count < 10000 / timestep:
+            m_backward(MAXIMUM_SPEED * 0.8)
+    elif count < 12000 / timestep:
+            r_right(MAXIMUM_SPEED * 0.7)
+    elif count < 14000 / timestep:
+            r_left(MAXIMUM_SPEED * 0.5)
+    else:
+        stop()
+    count += 1
 
 # Enter here exit cleanup code.
