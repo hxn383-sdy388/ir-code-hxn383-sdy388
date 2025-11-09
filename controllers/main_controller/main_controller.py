@@ -131,7 +131,16 @@ def get_pose():
     rot_axis_x, rot_axis_y, rot_axis_z, theta = rotation.getSFRotation()
 
     # heading (relative to $ x $ axis) is in radians
-    x_t[2] = theta
+    theta = np.arctan2(np.sin(theta), np.cos(theta)) # bound it
+
+    # check if the axis of rotation around z has become negative
+    # it does this when changing the direction of rotating
+    # hence to get an accurate sign on theta, need to multiply by -1 if axis of rotation has become negative
+    if rot_axis_z >= 0:
+        x_t[2] = theta
+    else:
+        x_t[2] = -1 * theta
+
     return
 
 def get_control():
@@ -280,7 +289,8 @@ def observation_update(state_estimate_bar, covariance_bar):
         # estimate the measurement using the measurement model
         # ie. what is the expected value of the measurement of the landmark, which is compared to the actual measured value in section that implements line 19
         # the estimated measurement is constructed of the distance (sqrt q), the relative heading, and the signature variable
-        estimated_measurement = np.array([[np.sqrt(q)], [np.atan2(delta_y, delta_x) - state_estimate_bar[2,0]], landmark_estimate[2]])
+        heading_est = np.atan2(delta_y, delta_x) - state_estimate_bar[2,0]
+        estimated_measurement = np.array([[np.sqrt(q)], [np.arctan2(np.sin(heading_est), np.cos(heading_est))], landmark_estimate[2]])
 
         # line 15
         # matrix used to apply the jacobian of the measurement model w.r.t the combined state vector to only the elements that correspond to the epuck pose and current landmark
@@ -308,7 +318,9 @@ def observation_update(state_estimate_bar, covariance_bar):
         k_t = np.dot(np.dot(covariance_bar, np.transpose(h_jacobian)),  np.linalg.inv(np.dot(h_jacobian, np.dot(covariance_bar, h_jacobian.transpose())) + Q))
 
         # append relevant matrices to the lists outside the loop so that the updated state estimate and updated covariance can be calculated and returned
-        measurement_deltas.append(measurement - estimated_measurement)
+        measurement_delta = measurement - estimated_measurement
+        measurement_delta[1, 0] = np.arctan2(np.sin(measurement_delta[1, 0]), np.cos(measurement_delta[1, 0]))
+        measurement_deltas.append(measurement_delta)
         measurement_jacobians.append(h_jacobian)
         kalman_gains.append(k_t)
 
@@ -323,6 +335,7 @@ def observation_update(state_estimate_bar, covariance_bar):
 
         updated_covariance = np.dot((np.eye(intermediate_var.shape[0]) - intermediate_var), covariance_bar) # implements functionality on line 20 - updates state uncertainty
 
+    updated_state_estimate[2,0] = np.arctan2(np.sin(updated_state_estimate[2,0]), np.cos(updated_state_estimate[2,0]))
     return updated_state_estimate, updated_covariance
 
 def temp_measure_landmarks():
@@ -335,7 +348,7 @@ def temp_measure_landmarks():
         distance = np.sqrt(np.square((landmark[0] - x_t[0])) + np.square((landmark[1] - x_t[1])))
         # check whether it's within the epuck's fov - 0.84 radians
         alpha = np.arctan2(landmark[1] - x_t[1], landmark[0] - x_t[0]) - x_t[2] # in this case, opposite is delta y, and adjacent is delta x
-        if np.abs(alpha) < 0.42 and distance < 0.06: # Wks 1-4 lab handout says epuck camera can see about 5.5cm in front of it
+        alpha = np.arctan2(np.sin(alpha), np.cos(alpha)) # bound alpha to be between -pi and +pi
         if np.abs(alpha) < 0.42 and distance < 0.092: # Wks 1-4 lab handout says epuck camera can see about 5.5cm in front of it - augmented to 0.092 to account for radius of epuck's body
             # each measurement takes the form of: distance to landmark, relative angle from epuck heading to landmark, correspondence of landmark (as per Probabilistic Robotics Table 10.1)
             z.append(((distance, alpha, 0), index)) # add 0 as the signature
