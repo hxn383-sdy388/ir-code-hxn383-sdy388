@@ -431,6 +431,20 @@ def draw_state_estimate():
     heading_y = display_y - (int(epuck_radius * np.sin(state_estimate[2])))
     display.setColor(0x2a4226)
     display.drawLine(int(display_x), int(display_y), int(heading_x), int(heading_y))
+
+    # draw landmarks
+    i = 3
+    while i < len(state_estimate):
+        landmark_x = state_estimate[i]
+        landmark_y = state_estimate[i + 1]
+
+        if not(np.isnan(landmark_x)) and not(np.isnan(landmark_y)):
+            display.setColor(0xbf22bd)
+            disp_x, disp_y = world_coords_to_display_cords(landmark_x, landmark_y)  # convert world coordinates to display coordinates
+            display.fillOval(disp_x, disp_y, 1, 1)
+
+        i += 3
+
     return
 
 def temp_draw_landmarks():
