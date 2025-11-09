@@ -417,6 +417,22 @@ def draw_pose():
     display.drawLine(int(display_x), int(display_y), int(heading_x), int(heading_y))
     return
 
+def draw_state_estimate():
+    # state_estimate = [x_coord, y_coord, theta, landmarks...]
+
+    # draw epuck body
+    display.setColor(0x24fc03)
+    epuck_radius = 0.037 * PIXELS_PER_METRE # epuck has 7.4cm diameter => 0.037m radius
+    display_x, display_y = world_coords_to_display_cords(state_estimate[0], state_estimate[1]) # convert world coordinates to display coordinates
+    display.fillOval(display_x, display_y, epuck_radius, epuck_radius)
+
+    # draw heading of epuck
+    heading_x = display_x + (int(epuck_radius * np.cos(state_estimate[2])))
+    heading_y = display_y - (int(epuck_radius * np.sin(state_estimate[2])))
+    display.setColor(0x2a4226)
+    display.drawLine(int(display_x), int(display_y), int(heading_x), int(heading_y))
+    return
+
 def temp_draw_landmarks():
     # temporary function, until landmarks implemented in environment
 
@@ -459,6 +475,7 @@ while robot.step(timestep) != -1:
     clean_display()
     draw_pose()
     temp_draw_landmarks()
+    draw_state_estimate()
 
     pass
 
