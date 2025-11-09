@@ -65,9 +65,9 @@ The noise matrix is a diagonal matrix on which the elements are the covariance o
 
 ie. if the first diagonal element was set to 1, this would correspond to an addition of 1 metre's worth of uncertainty in the x coordinate of the epuck's pose per timestep.
 '''
-noise = np.diag([0.00001,0.00001,0.00001]) # experimenting with some simulated noise
+noise = np.diag([0.000000001,0.000000001,0.000000001]) # experimenting with some simulated noise
 
-Q = np.diag([0.0001,0.0001,0.0001]) # units for the first two elements are metres - ie. each of these are just distances - ie. for given range and relative bearing measurements, how far off are the actual range and bearing (and signature - but that's expected to be zero in the current configuration) measurements expected to be. Currently experimenting with small noise values. None of these values can be zero or the inverse matrix operation later falls apart
+Q = np.diag([0.000000001,0.000000001,0.000000001]) # units for the first two elements are metres - ie. each of these are just distances - ie. for given range and relative bearing measurements, how far off are the actual range and bearing (and signature - but that's expected to be zero in the current configuration) measurements expected to be. Currently experimenting with small noise values. None of these values can be zero or the inverse matrix operation later falls apart
 
 
 # ---------- SETUP ----------
