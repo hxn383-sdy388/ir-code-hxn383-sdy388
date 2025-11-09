@@ -66,9 +66,8 @@ The noise matrix is a diagonal matrix on which the elements are the covariance o
 ie. if the first diagonal element was set to 1, this would correspond to an addition of 1 metre's worth of uncertainty in the x coordinate of the epuck's pose per timestep.
 '''
 noise = np.diag([0.00001,0.00001,0.00001]) # experimenting with some simulated noise
-# noise = np.zeros((3,3)) # matrix of zeros as using supervisor, so we have certainty
 
-Q = np.diag([0.0001,0.0001, 0]) # units for the first two elements are metres - ie. each of these are just distances - ie. for given range and relative bearing measurements, how far off are the actual range and bearing (and signature - but that's expected to be zero in the current configuration) measurements expected to be. Currently experimenting with small noise values
+Q = np.diag([0.0001,0.0001,0.0001]) # units for the first two elements are metres - ie. each of these are just distances - ie. for given range and relative bearing measurements, how far off are the actual range and bearing (and signature - but that's expected to be zero in the current configuration) measurements expected to be. Currently experimenting with small noise values. None of these values can be zero or the inverse matrix operation later falls apart
 
 
 # ---------- SETUP ----------
@@ -253,7 +252,7 @@ def observation_update(state_estimate_bar, covariance_bar):
     #   - Probabilistic Robotics explains that a feature extractor may generate a signature, which is assumed to be a numerical value - the example they give is average colour
     #   - the signature is treated as 0 at the moment as it has not been implemented to any significance
     for ((distance, alpha, signature), correspondence) in z_t:
-        measurement = (distance, alpha, signature) # re-pack so vector can be used later for getting the delta between the actual measurement and the expected measurement
+        measurement = np.array([[distance], [alpha], [signature]]) # re-pack so vector can be used later for getting the delta between the actual measurement and the expected measurement
 
         landmark_estimate = state_estimate_bar[3 + (3 * correspondence) : 3 + (3 * correspondence) + 3] # estimated x and y coords of landmark
 
@@ -314,11 +313,11 @@ def observation_update(state_estimate_bar, covariance_bar):
         kalman_gains.append(k_t)
 
     # (out of loop)
-    updated_covariance = covariance
+    updated_covariance = covariance_bar
     updated_state_estimate = state_estimate_bar
     if len(measurement_deltas) > 0:
         intermediate_var = np.zeros(np.shape(np.dot(kalman_gains[0], measurement_jacobians[0])))
-        for i in range(1, len(measurement_deltas)):
+        for i in range(len(measurement_deltas)):
             updated_state_estimate += np.dot(kalman_gains[i], measurement_deltas[i]) # implements functionality on line 19 - updates state estimate
             intermediate_var += np.dot(kalman_gains[i], measurement_jacobians[i])
 
