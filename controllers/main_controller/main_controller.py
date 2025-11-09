@@ -317,7 +317,7 @@ def observation_update(state_estimate_bar, covariance_bar):
     updated_state_estimate = state_estimate_bar
     if len(measurement_deltas) > 0:
         intermediate_var = np.zeros(np.shape(np.dot(kalman_gains[0], measurement_jacobians[0])))
-        for i in range(len(measurement_deltas)):
+        for i in range(0, len(measurement_deltas)):
             updated_state_estimate += np.dot(kalman_gains[i], measurement_deltas[i]) # implements functionality on line 19 - updates state estimate
             intermediate_var += np.dot(kalman_gains[i], measurement_jacobians[i])
 
@@ -336,6 +336,7 @@ def temp_measure_landmarks():
         # check whether it's within the epuck's fov - 0.84 radians
         alpha = np.arctan2(landmark[1] - x_t[1], landmark[0] - x_t[0]) - x_t[2] # in this case, opposite is delta y, and adjacent is delta x
         if np.abs(alpha) < 0.42 and distance < 0.06: # Wks 1-4 lab handout says epuck camera can see about 5.5cm in front of it
+        if np.abs(alpha) < 0.42 and distance < 0.092: # Wks 1-4 lab handout says epuck camera can see about 5.5cm in front of it - augmented to 0.092 to account for radius of epuck's body
             # each measurement takes the form of: distance to landmark, relative angle from epuck heading to landmark, correspondence of landmark (as per Probabilistic Robotics Table 10.1)
             z.append(((distance, alpha, 0), index)) # add 0 as the signature
             # print(f"landmark measured: distance: {distance}, alpha: {rad_to_deg(alpha)}, index: {index}")
