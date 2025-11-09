@@ -147,7 +147,7 @@ def get_control():
 
     # linear (ie. straight line) velocity is the norm of the vector formed of x and y velocities
     # linear velocity is in metres/second
-    u_t[0] = np.sqrt(vx ** 2 + vy ** 2)
+    u_t[0] = vx * np.cos(x_t[2]) + vy * np.sin(x_t[2]) # use with signed velocity to cope with the epuck reversing
 
     # angular velocity ($ \omega $) is the velocity of rotation about the z (vertical) axis
     # therefore, angular velocity is in radians/second
