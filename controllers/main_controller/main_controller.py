@@ -102,7 +102,7 @@ translation = epuck_node.getField('translation')
 rotation = epuck_node.getField('rotation')
 
 
-# get display
+# get display (the standard one that shows the pose and landmarks - not the occupancy grid one)
 display = robot.getDevice('display')
 display_width = display.getWidth()
 display_height = display.getHeight()
@@ -110,6 +110,12 @@ display_height = display.getHeight()
 # visualise the epuck's x-y origin (0,0) in the centre of the display
 display_origin_x = display_width / 2
 display_origin_y = display_height / 2
+
+
+# get occupancy grid display
+occ_grid_disp = robot.getDevice('occupancy-grid')
+occ_grid_disp_width = occ_grid_disp.getWidth()
+occ_grid_disp_height = occ_grid_disp.getHeight()
 
 
 # ---------- FUNCTIONS ----------
@@ -358,6 +364,11 @@ def temp_measure_landmarks():
 
     return z
 
+# Occupancy Grid
+def calculate_occupancy_grid():
+    # TODO
+    return
+
 # Convenience
 def rad_to_deg(rads):
     # convenience function
@@ -470,7 +481,7 @@ def temp_draw_landmarks():
         display.fillOval(display_x, display_y, 1, 1)
     return
 
-def clean_display():
+def clean_displays():
     # removes anything not explicitly drawn this time-step on the display
     display.setColor(0xffffff)  # make display background white
     display.fillRectangle(0, 0, display_width, display_height)
@@ -499,8 +510,8 @@ while robot.step(timestep) != -1:
 
     # ---------------------------------
 
-    # Update display
-    clean_display()
+    # Update displays
+    clean_displays()
     draw_pose()
     temp_draw_landmarks()
     draw_state_estimate()
