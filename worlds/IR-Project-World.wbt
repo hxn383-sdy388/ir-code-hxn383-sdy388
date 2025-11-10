@@ -36,7 +36,7 @@ E-puck {
       height 96
       fieldOfView 0.84
       recognition Recognition {
-        maxRange 0.06
+        maxRange 0.15
         maxObjects 32
         occlusion 1
       }
