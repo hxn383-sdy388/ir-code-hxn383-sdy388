@@ -102,6 +102,12 @@ translation = epuck_node.getField('translation')
 rotation = epuck_node.getField('rotation')
 
 
+# get the camera and enable the recognition node
+camera = robot.getDevice('recognitioncamera')
+camera.enable(timestep)
+camera.recognitionEnable(timestep)
+
+
 # get display (the standard one that shows the pose and landmarks - not the occupancy grid one)
 display = robot.getDevice('display')
 display_width = display.getWidth()
@@ -364,6 +370,26 @@ def temp_measure_landmarks():
 
     return z
 
+def cam_recog_measure_landmarks():
+    # using the camera's recognition feature, measure the landmark positions
+    # landmarks have been given model tags that represent the correspondences
+    z = [] # measurements
+
+    recognised_objects = camera.getRecognitionObjects()
+    for object in recognised_objects:
+        index = int(object.getModel()) # this is the correspondence of the landmark
+
+        rel_x, rel_y, rel_z = object.getPosition() # position is relative to the epuck
+
+        distance = np.hypot(float(rel_y), float(rel_x)) # calculate straight line distance between epuck and recognised landmark
+
+        alpha = np.arctan2(rel_y, rel_x) # calculate the relative bearing between the epuck and landmark
+        alpha = np.arctan2(np.sin(alpha), np.cos(alpha)) # bound the bearing to be between -pi and +pi
+
+        z.append(((float(distance), float(alpha), 0), index))
+
+    return z
+
 # Occupancy Grid
 def calculate_occupancy_grid():
     # TODO
@@ -478,13 +504,18 @@ def temp_draw_landmarks():
     for x, y, signature in landmarks:
         display.setColor(0x3d3527)
         display_x, display_y = world_coords_to_display_cords(x, y)  # convert world coordinates to display coordinates
-        display.fillOval(display_x, display_y, 1, 1)
+        diameter = 0.03 * PIXELS_PER_METRE
+        display.fillOval(display_x, display_y, diameter, diameter)
     return
 
 def clean_displays():
     # removes anything not explicitly drawn this time-step on the display
     display.setColor(0xffffff)  # make display background white
     display.fillRectangle(0, 0, display_width, display_height)
+
+    # do the same for the occupancy grid display
+    occ_grid_disp.setColor(0xffffff)
+    occ_grid_disp.fillRectangle(0, 0, occ_grid_disp_width, occ_grid_disp_height)
     return
 
 
@@ -494,7 +525,9 @@ while robot.step(timestep) != -1:
     # Poll sensors
     get_pose()
     get_control()
-    z_t = temp_measure_landmarks()
+    # z_t = temp_measure_landmarks()
+    z_t = cam_recog_measure_landmarks()
+
 
     # Process sensor data
     state_estimate_prime, covariance_prime = time_update()
