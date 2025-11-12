@@ -2,7 +2,8 @@
 
 # You may need to import some classes of the controller module. Ex:
 #  from controller import Robot, Motor, DistanceSensor
-from controller import Robot, Motor, Keyboard
+from controller import Robot, Motor, Keyboard, PositionSensor
+import math
 
 # create the Robot instance.
 robot = Robot()
@@ -13,10 +14,16 @@ timestep = int(robot.getBasicTimeStep())
 # variables for each motor...
 right_motor = robot.getDevice('right wheel motor')
 left_motor = robot.getDevice('left wheel motor')
+left_encoder = robot.getDevice('left wheel sensor')
+right_encoder = robot.getDevice('right wheel sensor')
 
 # initialise the keybaord
 keyboard = robot.getKeyboard()
 keyboard.enable(timestep)
+
+# initialise the encoders
+left_encoder.enable(timestep)
+right_encoder.enable(timestep)
 
 # Set motors to velocity control mode
 left_motor.setPosition(float('inf'))
@@ -26,11 +33,25 @@ right_motor.setPosition(float('inf'))
 left_motor.setVelocity(0.0)
 right_motor.setVelocity(0.0)
 
+# Odometry constants
+WHEEL_RADIUS = 0.02
+AXLE_LENGTH = 0.05
+ENCODER_RESOLUTION = 160
+
 # Constant Global Variables...
 MODE = 'manual' # Determines how to navigate the robot
 MAXIMUM_SPEED = 5 # rad/s
 NORMAL_SPEED = MAXIMUM_SPEED / 2
 TURNING_FACTOR = 0.1 # Assigned to half for now
+
+# Odometry state variables
+x = 0.0 # x position in meters
+y = 0.0 # y position in meters
+theta = 0.0 # orientation in radians
+
+# Previous encoder values
+prev_left_encoder = 0.0
+prev_right_encoder = 0.0
 
 # Movement Functions - Follow prefixes
 # Move (m)
