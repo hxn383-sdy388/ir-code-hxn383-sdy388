@@ -86,8 +86,54 @@ def t_right(s):
     left_motor.setVelocity(s)
     right_motor.setVelocity(s * TURNING_FACTOR)
 
+def odometry_update():
+    global x, y, theta, prev_left_encoder, prev_right_encoder
+    
+    # get the encoder values - in radians
+    l_encoder_val = left_encoder.getValue()
+    r_encoder_val = right_encoder.getValue()
+    
+    # calculate the shift between encoder values
+    d_left = l_encoder_val - prev_left_encoder
+    d_right = r_encoder_val - prev_right_encoder
+    
+    # Convert these into linear distance
+    l_distance = d_left * WHEEL_RADIUS
+    r_distance = d_right * WHEEL_RADIUS
+    
+    # Calculate center displacement and orientation change
+    center_distance = (l_distance + r_distance) / 2.0
+    d_theta = (r_distance - l_distance) / AXLE_LENGTH
+    
+    # Update orientation
+    theta += d_theta
+    
+    # normalize theta to a value between -pi, pi
+    theta = math.atan2(math.sin(theta), math.cos(theta))
+    
+    # Update position
+    x += center_distance * math.cos(theta)
+    y += center_distance * math.sin(theta)
+    
+    # store current encoder values for next iteration
+    prev_left_encoder = l_encoder_val
+    prev_right_encoder = r_encoder_val
+
+def get_pose():
+    # Neatly returns the epuck position
+    return x, y, theta
+
 # Main loop: Testing Movement Functions
 while robot.step(timestep) != -1:
+    # update odometry every timestep
+    odometry_update()
+    
+    # Get current pose
+    current_x, current_y, current_theta = get_pose()
+    
+    # Print current pose
+    print(f"Position: ({current_x:.3f}, {current_y:.3f}) - Orientation: {math.degrees(current_theta):.1f}°")
+    
     if MODE == 'manual':
         # Get the current key pressed
         key = keyboard.getKey()
