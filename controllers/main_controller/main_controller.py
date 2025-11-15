@@ -9,11 +9,14 @@ from controller import Keyboard # for driving in the "explore" phase
 
 # ---------- CONSTANTS ----------
 SPEED_UNIT = 0.00628
-MAX_SPEED = 200 # can go to a maximum of 1000. Speed limit helps keep motion of epuck smooth
-SPEED_INCREMENT = 4
 LEFT = 0 # used to refer to the left wheel's motor in the speed
 RIGHT = 1
 PIXELS_PER_METRE = 100 # ratio of pixels per metre - i.e. 1 pixels corresponds to 1cm
+
+
+# ---------- PARAMETERS ----------
+MAX_SPEED = 200 # can go to a maximum of 1000. Speed limit helps keep motion of epuck smooth
+SPEED_INCREMENT = 4
 
 
 # ---------- VARIABLES & DATA STRUCTURES ----------
@@ -21,6 +24,7 @@ speed = [0,0] # list for controlling the speed - done this way control speed usi
 x_t = [0,0,0] # list for storing pose at current time $ t $, in the format [$ x $, $ y $, $ \theta $]
 u_t = [0,0] # list for storing the control applied at time $ t - 1 $ to drive the epuck to pose $ \vec{x}_t $ at time $ t $. Elements: linear velocity, angular velocity
 landmarks = [(-0.25,0.25,0), (0.25,0.25,0), (-0.25,-0.25,0), (0.25,-0.25,0)] # signatures added as 0
+landmark_counter = 0
 z_t = [] # list for landmark measurements, where each element is of the form (distance, bearing from epuck, correspondence)
 
 '''
@@ -31,7 +35,8 @@ The purpose of the matrix f_x is for the state estimate to be updated, manipulat
 
 The matrix is initialised as a horizontally stacked (3 x 3) identity matrix, and a (3 x 3n) matrix, where n is the number of landmarks. 
 '''
-f_x = np.hstack((np.eye(3), np.zeros((3, 3 * len(landmarks)))))
+# f_x = np.hstack((np.eye(3), np.zeros((3, 3 * len(landmarks)))))
+# f_x = np.eye(3)
 
 '''
 The state estimate vector, notated in Probabilistic Robotics as $ u_t $, is a vector containing first elements of the epuck's pose, and then elements for all the (x,y) coordinates of all landmarks.
@@ -44,7 +49,7 @@ The vector is initialised as a column vector with (3 + 3n) elements, where n is 
 
 The landmark location elements have been initialised as nan's so that it can be ascertained whether they've been seen before. (nan indicates landmark has not been seen yet).
 '''
-state_estimate = np.full((3 + 3 * len(landmarks), 1), np.nan)
+state_estimate = np.full((3 + 3 * landmark_counter, 1), np.nan)
 state_estimate[0:3] = [0] # correct the pose elements back to way described above
 
 '''
@@ -56,7 +61,7 @@ The off-diagonal elements correspond to the correlations, which are initialised 
 
 Zeros are filled in on the first three diagonal elements for the epuck's pose, consistent with the initialisation outlined in Probabilistic Robotics.
 '''
-covariance = np.zeros((3 + 3 * len(landmarks), 3 + 3 * len(landmarks)))
+covariance = np.zeros((3 + 3 * landmark_counter, 3 + 3 * landmark_counter))
 np.fill_diagonal(covariance, 100)
 covariance[:3, :3] = 0 # state uncertainty for epuck - assume known position initially
 
@@ -176,8 +181,18 @@ def get_control():
     u_t[1] = wz
     return
 
-def time_update():
-    # line 3 prob robotics (ekf slam known correspondences)
+def time_update(input_state_estimate):
+    # Probabilistic Robotics defines the combined state vector as the vector of the robot's pose and (x,y) coordinates of all landmarks.
+    # The coordinates of each of these landmarks is assumed to remain constant throughout simulation.
+    #
+    # The purpose of the selector matrix f_x is for the state estimate to be updated, manipulating only the entries corresponding to the robot's pose, leaving entries corresponding to landmarks unchanged.
+    #
+    # The matrix is initialised as a horizontally stacked (3 x 3) identity matrix, and a (3 x 3n) matrix, where n is the number of landmarks.
+    f_x = np.hstack((np.eye(3), np.zeros((3, (np.shape(state_estimate)[0] - 3)))))
+
+
+
+    # line 4 prob robotics (ekf slam full)
     # update the state estimate: $ \bar{u}_t $
     # intuition - take the best state estimate from the previous time step, and based on the control $ \vec{u}_t $, update the state estimate for this time step
 
@@ -215,7 +230,7 @@ def time_update():
     motion_model_matrix = np.array([[float(motion_model_x)], [float(motion_model_y)], [float(motion_model_theta)]]) # 3x1 matrix
 
     # apply the motion model to update the state estimate
-    updated_state_est = state_estimate + np.dot(f_x.T, motion_model_matrix)
+    updated_state_est = input_state_estimate + np.dot(f_x.T, motion_model_matrix)
 
     # print(f"actual pose = {x_t}")
     # print(f"actual control = {u_t}")
@@ -226,9 +241,9 @@ def time_update():
 
 
     # Note that Probabilistic robotics termed $ y_t $ as the combined state vector - ie. the pose and landmarks
-    # Lines 4 and 5 of the textbook algorithm are responsible for updating the state uncertainty with respect to the motion model and random noise
+    # Lines 5 and 6 of the textbook algorithm are responsible for updating the state uncertainty with respect to the motion model and random noise
 
-    # Line 4 defines $ G_t $ - an auxiliary matrix constructed by taking the Jacobian of the state model, where the only non-zero elements are the first derivatives of the x and y motion model components w.r.t theta
+    # Line 5 defines $ G_t $ - an auxiliary matrix constructed by taking the Jacobian of the state model, where the only non-zero elements are the first derivatives of the x and y motion model components w.r.t theta
     # ie. The non-zero elements model how the x and y coords of the epuck are changing
     # There is a differentiation error in the version of the book that I had access to, where both elements are off by a factor of -1, which has been corrected in this implementation
     # Again, as working with dividing by the angular velocity again, need to handle the case where the angular velocity tends to 0
@@ -250,7 +265,7 @@ def time_update():
     # construct the matrix that embeds this in the space represented by the combined state vector, rather than just the pose
     jacobian_wrt_combined_state_vector = np.eye((f_x.shape[1])) + np.dot(np.dot(f_x.transpose(), jacobian_wrt_pose), f_x)
 
-    # line 5
+    # line 6
     # Use the auxiliary matrix to update the covariance matrix from the previous covariance, plus some noise from a random variable that's added to the state each prediction update
     updated_covariance = np.dot(np.dot(jacobian_wrt_combined_state_vector, covariance), jacobian_wrt_combined_state_vector.transpose()) + np.dot(np.dot(f_x.transpose(), noise), f_x)
 
@@ -259,9 +274,10 @@ def time_update():
 
 def observation_update(state_estimate_bar, covariance_bar):
     # Goal is to use the measurements to inform the state estimate (of both epuck pose and landmark positions) and inform uncertainties around the epuck's pose and landmark positions
+    # Need to decide whether each measurement corresponds to a new or existing landmark
 
-    # line 7 and beyond prob robotics (ekf slam known correspondences)
-    # define lists that accumulate relevant matrices from within the for-loop, that are required outside of it
+    # line 8 and beyond prob robotics (ekf slam known correspondences)
+    # define lists that accumulate relevant matrices from within the for-loops, that are required outside of it
     measurement_deltas = []
     measurement_jacobians = []
     kalman_gains = []
@@ -273,83 +289,172 @@ def observation_update(state_estimate_bar, covariance_bar):
     # signature is treated as 0 at the moment
     #   - Probabilistic Robotics explains that a feature extractor may generate a signature, which is assumed to be a numerical value - the example they give is average colour
     #   - the signature is treated as 0 at the moment as it has not been implemented to any significance
+
+    # define the counter used to track how many new landmarks are created
+    n_t = landmark_counter
+
+    # outer loop - iterate through the measurements
     for ((distance, alpha, signature), correspondence) in z_t:
         measurement = np.array([[distance], [alpha], [signature]]) # re-pack so vector can be used later for getting the delta between the actual measurement and the expected measurement
-
-        landmark_estimate = state_estimate_bar[3 + (3 * correspondence) : 3 + (3 * correspondence) + 3] # estimated x and y coords of landmark
 
         # lines 9 & 10
         # landmark x,y coordinates were initialised to nan to distinguish whether landmark has been seen before
         # ie. nan -> not seen before
-        if np.isnan(landmark_estimate[0]):
+        # if np.isnan(landmark_estimate[0]):
             # landmark hasn't been seen before
             # hence, take its position relative to the current estimated pose of the epuck
 
             # third element of the state estimate is theta, which isn't relevant here - instead the third element should be the signature (taken as 0 for now), hence why the first term slices only [0:2] of state_estimate
-            landmark_estimate = np.array([state_estimate_bar[0], state_estimate_bar[1], [0]]) + (distance *  np.array([[np.cos(alpha + state_estimate_bar[2,0])], [np.sin(alpha + state_estimate_bar[2,0])], [signature]]))
-            state_estimate_bar[3 + (3 * correspondence): 3 + (3 * correspondence) + 3] = landmark_estimate # write back into the state estimate vector (the version passed in to this function from the time update step, not the global one)
+            # landmark_estimate = np.array([state_estimate_bar[0], state_estimate_bar[1], [0]]) + (distance *  np.array([[np.cos(alpha + state_estimate_bar[2,0])], [np.sin(alpha + state_estimate_bar[2,0])], [signature]]))
+            # state_estimate_bar[3 + (3 * correspondence): 3 + (3 * correspondence) + 3] = landmark_estimate # write back into the state estimate vector (the version passed in to this function from the time update step, not the global one)
+
+        # line 9
+        landmark_estimate = np.array([state_estimate_bar[0], state_estimate_bar[1], [0]]) + (distance * np.array([[np.cos(alpha + state_estimate_bar[2, 0])], [np.sin(alpha + state_estimate_bar[2, 0])], [signature]]))
+
+        # define lists that accumulate relevant data from within the inner for-loop, which are required for deciding whether to create a new landmark or update and existing one
+        intermediate_deltas = []
+        intermediate_psis = []
+        intermediate_pies = []
+        intermediate_h_jacobians = []
+
+        # provisionally augment the state estimate vector to be one larger
+        # ie. model the observation as being a new landmark for the scope of this inner for-loop
+        state_estimate_poss = np.vstack((state_estimate_bar, landmark_estimate))
+
+        # provisionally augment the covariance matrix accordingly
+        n = covariance_bar.shape[0]
+        covariance_poss = np.pad(covariance_bar, ((0, 3), (0, 3)), mode='constant', constant_values=0)
+        covariance_poss[n, n] = 100 # set the diagonal elements
+        covariance_poss[n + 1, n + 1] = 100
+        covariance_poss[n + 2, n + 2] = 100
+
+        # inner for-loop - needs to be one more than n_t - easiest explanation is for when there are zero landmarks, this still needs to run, hence needs to be n_t + 1
+        for k in range(0, n_t + 1):
+
+            # lines 11 and 12
+            # helper variables for the x and y displacement between the epuck and current landmark k
+            delta_kx = state_estimate_poss[3 + (3 * k), 0] - state_estimate_poss[0,0]
+            delta_ky = state_estimate_poss[3 + (3 * k) + 1, 0] - state_estimate_poss[1,0]
+            delta_k = np.array([delta_kx, delta_ky])
+
+            q_k = np.dot(np.transpose(delta_k), delta_k) # squared distance between epuck and current landmark k
+
+            # line 13
+            # estimate the measurement using the measurement model
+            # ie. what is the expected value of the measurement of the landmark k, which is compared to the actual measured value later on, out of both of the for-loops
+            # the estimated measurement is constructed of the distance (sqrt q), the relative heading, and the signature variable
+            heading_est_k = np.atan2(delta_ky, delta_kx) - state_estimate_poss[2,0]
+            estimated_measurement_k = np.array([[np.sqrt(q_k)], [np.arctan2(np.sin(heading_est_k), np.cos(heading_est_k))], state_estimate_poss[3 + k + 2]])
+
+            # line 15
+            # selector matrix used to apply the jacobian of the measurement model w.r.t the combined state vector to only the elements that correspond to the epuck pose and current landmark k
+            f_xk = np.zeros((6, 3 + 3 * (n_t + 1)))
+            f_xk[:3,:3] = np.eye(3) # select elements corresponding to epuck pose
+            f_xk[3:,3 + (2 * k) - 2:3 + (2 * k) - 2+3] = np.eye(3) # select elements corresponding to current landmark k
+
+            # line 15
+            # note that in Table 10.2 of Probabilistic Robotics - at least in the version of the book that I had access to - there's several elements of the matrix that are off by a factor of -1. This has been corrected in this implementation
+            # where h is the measurement model:
+            h_k_jacobian_r_line = np.array([[-1 * delta_kx * np.sqrt(q_k)], [-1 * delta_ky * np.sqrt(q_k)], [0], [delta_kx * np.sqrt(q_k)], [delta_ky * np.sqrt(q_k)], [0]])
+            h_k_jacobian_phi_line = np.array([[delta_ky], [-1 * delta_kx], [-1], [-1 * delta_ky], [delta_kx], [0]])
+            h_k_jacobian_signature_line = np.array([[0], [0], [0], [0], [0], [1]])
+
+            h_k_jacobian = np.vstack([
+                np.transpose(h_k_jacobian_r_line),
+                np.transpose(h_k_jacobian_phi_line),
+                np.transpose(h_k_jacobian_signature_line)
+            ])
+
+            h_k_jacobian = (1 / q_k) * np.dot(h_k_jacobian, f_xk)
+
+            # calculate Mahalanobis distance
+            psi_k = np.dot(np.dot(h_k_jacobian, covariance_poss), np.transpose(h_k_jacobian)) + Q
+            pi_k = np.dot(np.dot(np.transpose(measurement - estimated_measurement_k), np.linalg.inv(psi_k)), (measurement - estimated_measurement_k))
+
+            # add all these structures to the intermediate lists so that it can be decided whether the landmark is new or not, and then update the state estimate and covariance accordingly
+            intermediate_psis.append(psi_k)
+            intermediate_pies.append(pi_k)
+            intermediate_h_jacobians.append(h_k_jacobian)
+            intermediate_deltas.append((measurement - estimated_measurement_k))
+            # end inner for-loop
+
+        # (out of the inner loop)
+
+        # line 19
+        # set the threshold for creating a new landmark
+        # ie. the measurement is interpreted as measuring a new landmark if the Mahalanobis distance to all existing landmarks exceeds this threshold
+        # setting this to a larger value increases the likelihood of rejecting the measurement as being a new landmark, as it's more likely on the next line to prefer an existing landmark that has a lower value
+        # setting this to a lower value increases the likelihood of accepting this measurement as being a new landmark, where it's more likely that this value will be lower than the corresponding values for the other landmarks
+        intermediate_pies[len(intermediate_pies) - 1] = np.array([[10]]) # 10 for experimenting, needs tuning
+
+        # line 20
+        # select the landmark index that minimises this quantity
+        j_i = np.argmin(intermediate_pies)
+
+        # line 21
+        # if the measurement is a new landmark
+        if j_i + 1 > n_t:
+            n_t += 1 # increase the landmark counter
+
+            # augment state estimate vector and covariance matrix, assigning the speculated versions that have the dimension(s) added to account for the new landmark
+            state_estimate_bar = state_estimate_poss
+            covariance_bar = covariance_poss
 
 
-        # lines 12 and 13
-        # helper variables for the x and y displacement between the epuck and current landmark
-        delta_x = landmark_estimate[0,0] - state_estimate_bar[0,0]
-        delta_y = landmark_estimate[1,0] - state_estimate_bar[1,0]
-        delta = np.array([delta_x, delta_y])
+        # line 22
+        kalman_gain = np.dot(np.dot(covariance_poss, np.transpose(intermediate_h_jacobians[j_i])), np.linalg.inv(intermediate_psis[j_i]))
+        kalman_gains.append(kalman_gain)
+        measurement_deltas.append(intermediate_deltas[j_i])
+        measurement_jacobians.append(intermediate_h_jacobians[j_i])
 
-        q = np.dot(np.transpose(delta), delta) # squared distance between epuck and current landmark
+    # (out of outer for-loop)
+    # preparation for lines 24 and 25
+    if n_t > landmark_counter:
+        # ie. at least one measurement has been interpreted as a new landmark
 
-        # line 14
-        # estimate the measurement using the measurement model
-        # ie. what is the expected value of the measurement of the landmark, which is compared to the actual measured value in section that implements line 19
-        # the estimated measurement is constructed of the distance (sqrt q), the relative heading, and the signature variable
-        heading_est = np.atan2(delta_y, delta_x) - state_estimate_bar[2,0]
-        estimated_measurement = np.array([[np.sqrt(q)], [np.arctan2(np.sin(heading_est), np.cos(heading_est))], landmark_estimate[2]])
+        # therefore:
+        #   - need to step up the dimensions of the kalman gain matrices to have the correct number of rows to have entries for all new landmarks, so that matrix calculations can proceed correctly
+        #   - need to step up the dimensions of the measurement jacobian matrices to have the correct number of columns to have entries for all new landmarks, so that matrix calculations can proceed correctly
 
-        # line 15
-        # matrix used to apply the jacobian of the measurement model w.r.t the combined state vector to only the elements that correspond to the epuck pose and current landmark
-        f_xj = np.zeros((6, 3 + 3 * len(landmarks)))
-        f_xj[:3,:3] = np.eye(3)
-        f_xj[3:,3 + (2 * correspondence) - 2:3 + (2 * correspondence) - 2+3] = np.eye(3)
+        for i in range(0,len(kalman_gains)): # can use the kalman gains for the index, as each of these lists will have the same number of elements (one per measurement)
+            # cols need expanding to num of cols in state est
+            while np.shape(kalman_gains[i])[0] < np.shape(state_estimate_bar)[0]:
+                kalman_gains[i] = np.vstack([kalman_gains[i], np.zeros((1, kalman_gains[i].shape[1]))])
 
-        # line 16
-        # note that in Table 10.1 of Probabilistic Robotics - at least in the version of the book that I had access to - there's several elements of the matrix that are off by a factor of -1. This has been corrected in this implementation
-        # where h is the measurement model:
-        h_jacobian_r_line = np.array([[-1 * delta_x * np.sqrt(q)], [-1 * delta_y * np.sqrt(q)], [0], [delta_x * np.sqrt(q)], [delta_y * np.sqrt(q)], [0]])
-        h_jacobian_phi_line = np.array([[delta_y], [-1 * delta_x], [-1], [-1 * delta_y], [delta_x], [0]])
-        h_jacobian_signature_line = np.array([[0], [0], [0], [0], [0], [1]])
+            # step up measurement jacobians - rows need expanding to num of cols in state est:
+            extra_cols = np.shape(state_estimate_bar)[0] - np.shape(measurement_jacobians[i])[1]
+            if extra_cols > 0:
+                measurement_jacobians[i] = np.hstack([
+                    measurement_jacobians[i],
+                    np.zeros((measurement_jacobians[i].shape[0], extra_cols))
+                ])
+    else:
+        # ie. no measurements were interpreted as a new landmark
 
-        h_jacobian = np.vstack([
-            np.transpose(h_jacobian_r_line),
-            np.transpose(h_jacobian_phi_line),
-            np.transpose(h_jacobian_signature_line)
-        ])
+        # therefore:
+        #   - need to trim the number of rows on the kalman gain matrices to remove the last three rows which correspond to how the new measurement (for the iteration this matrix belongs to) was speculated to be a new landmark, so that matrix calculations can proceed correctly under the assumption that this measurement corresponds to an existing landmark
+        #   - need to trim the number of columns on the measurement jacobian matrices to remove the last three rows which correspond to how the new measurement (for the iteration this matrix belongs to) was speculated to be a new landmark, so that matrix calculations can proceed correctly under the assumption that this measurement corresponds to an existing landmark
 
-        h_jacobian = (1 / q) * np.dot(h_jacobian, f_xj)
+        for i in range(0,len(measurement_jacobians)):
+            if np.shape(kalman_gains[i])[0] > np.shape(state_estimate_bar)[0]:
+                kalman_gains[i] = kalman_gains[i][:-3,:] # remove the last three rows
 
-        # line 17
-        # Q - noise parameters - for a given range & bearing (& signature) measurement, how far off is it expected to be from the true measurement
-        k_t = np.dot(np.dot(covariance_bar, np.transpose(h_jacobian)),  np.linalg.inv(np.dot(h_jacobian, np.dot(covariance_bar, h_jacobian.transpose())) + Q))
+            measurement_jacobians[i] = measurement_jacobians[i][:, :-3] # remove last three columns
 
-        # append relevant matrices to the lists outside the loop so that the updated state estimate and updated covariance can be calculated and returned
-        measurement_delta = measurement - estimated_measurement
-        measurement_delta[1, 0] = np.arctan2(np.sin(measurement_delta[1, 0]), np.cos(measurement_delta[1, 0]))
-        measurement_deltas.append(measurement_delta)
-        measurement_jacobians.append(h_jacobian)
-        kalman_gains.append(k_t)
-
-    # (out of loop)
+    # initialise the return values
     updated_covariance = covariance_bar
     updated_state_estimate = state_estimate_bar
+
     if len(measurement_deltas) > 0:
         intermediate_var = np.zeros(np.shape(np.dot(kalman_gains[0], measurement_jacobians[0])))
         for i in range(0, len(measurement_deltas)):
-            updated_state_estimate += np.dot(kalman_gains[i], measurement_deltas[i]) # implements functionality on line 19 - updates state estimate
+            updated_state_estimate += np.dot(kalman_gains[i], measurement_deltas[i]) # implements functionality on line 24 - updates state estimate
             intermediate_var += np.dot(kalman_gains[i], measurement_jacobians[i])
 
-        updated_covariance = np.dot((np.eye(intermediate_var.shape[0]) - intermediate_var), covariance_bar) # implements functionality on line 20 - updates state uncertainty
+        updated_covariance = np.dot((np.eye(intermediate_var.shape[0]) - intermediate_var), covariance_bar) # implements functionality on line 25 - updates state uncertainty
 
     updated_state_estimate[2,0] = np.arctan2(np.sin(updated_state_estimate[2,0]), np.cos(updated_state_estimate[2,0]))
-    return updated_state_estimate, updated_covariance
+    return updated_state_estimate, updated_covariance, n_t
 
 def temp_measure_landmarks():
     z = [] # measurements
@@ -362,7 +467,7 @@ def temp_measure_landmarks():
         # check whether it's within the epuck's fov - 0.84 radians
         alpha = np.arctan2(landmark[1] - x_t[1], landmark[0] - x_t[0]) - x_t[2] # in this case, opposite is delta y, and adjacent is delta x
         alpha = np.arctan2(np.sin(alpha), np.cos(alpha)) # bound alpha to be between -pi and +pi
-        if np.abs(alpha) < 0.42 and distance < 0.092: # Wks 1-4 lab handout says epuck camera can see about 5.5cm in front of it - augmented to 0.092 to account for radius of epuck's body
+        if np.abs(alpha) < 0.42 and distance < 0.15: # Wks 1-4 lab handout says epuck camera can see about 5.5cm in front of it - augmented to 0.092 to account for radius of epuck's body
             # each measurement takes the form of: distance to landmark, relative angle from epuck heading to landmark, correspondence of landmark (as per Probabilistic Robotics Table 10.1)
             z.append(((distance, alpha, 0), index)) # add 0 as the signature
             # print(f"landmark measured: distance: {distance}, alpha: {rad_to_deg(alpha)}, index: {index}")
@@ -531,11 +636,10 @@ while robot.step(timestep) != -1:
 
 
     # Process sensor data
-    state_estimate_prime, covariance_prime = time_update()
-    state_estimate, covariance = observation_update(state_estimate_prime, covariance_prime)
+    state_estimate_prime, covariance_prime = time_update(state_estimate)
+    state_estimate, covariance, landmark_counter = observation_update(state_estimate_prime, covariance_prime)
 
     print(f"state_estimate: {state_estimate}")
-    print(f"covariance: {covariance}")
     print("\n\n")
 
 
