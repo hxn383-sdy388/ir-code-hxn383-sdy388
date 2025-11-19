@@ -578,6 +578,8 @@ def calculate_occupancy_grid():
     y_proportion = epuck_y_dist / y_dist
     row_pos = int(np.floor(y_proportion * row_count))
 
+    epuck_cell = (row_count - row_pos - 1, col_pos) # need to augment the row pos because the occupancy matrix will be later flipped vertically for intuition wrt. the Cartesian plane when printed/displayed
+
     occupancy_grid[row_pos, col_pos] = 0 # 0 for free
 
 
@@ -606,9 +608,9 @@ def calculate_occupancy_grid():
     occupancy_grid = np.flipud(occupancy_grid)
 
     # the origin cell row index is now given by the number of above origin rows - because it's one more than this count, hence taking it without +1 is fine, and it's above origin row count rather than below because of the flip done to the matrix to make it more intuitive for when printed out
-    origin_cell_coord = (above_origin_rows, left_of_origin_cols)
+    origin_cell = (above_origin_rows, left_of_origin_cols)
 
-    return origin_cell_coord, occupancy_grid
+    return origin_cell, epuck_cell, occupancy_grid
 
 # Convenience
 def rad_to_deg(rads):
@@ -724,16 +726,21 @@ def temp_draw_landmarks():
         display.fillOval(display_x, display_y, radius, radius)
     return
 
-def draw_occupancy_grid(origin_cell_coord, occupancy_grid):
+def draw_occupancy_grid(origin_cell, epuck_cell, occupancy_grid):
     # Visualises the occupancy grid on a display
     # Unoccupied cells are drawn as alternating shades of grey (for visual differentiation)
     # Occupied cells are drawn in red
     # The cell containing the origin is drawn in pink (to make it easier to visually landmark cells in the occupancy grid)
+    # The cell currently occupied by the centre of the epuck is drawn in green
     #
     # Throughout epuck movement, the drawn grid may appear to become distorted
     # This is a consequence of the limited size of the display, and the occupancy grid growing unbalanced in either its number of rows or columns
     # Despite this visual behaviour, each cell in the occupancy actually represents a square area at all times
+    #
+    # Another visual anomaly may be white lines appearing between grid cells on the display
+    # This attributable to precision issues mapping points from within the occupancy grid space to the display space, where the former's size is dynamic and unlimited, and the latter is static and (hence) limited
 
+    # ------------------------------
 
     # take the number of rows/cols, divide display width by num of rows/cols, that's cell width/height
     row_count = np.shape(occupancy_grid)[0]
@@ -757,12 +764,17 @@ def draw_occupancy_grid(origin_cell_coord, occupancy_grid):
                 occ_grid_disp.fillRectangle(col * cell_width, row * cell_height, cell_width, cell_height)
 
             # if the cell contains the origin, draw it in pink
-            if (row,col) == origin_cell_coord:
+            if (row,col) == origin_cell:
                 occ_grid_disp.setColor(0xbf22bd)
                 occ_grid_disp.fillRectangle(col * cell_width, row * cell_height, cell_width, cell_height)
             # if the cell is believed to be occupied, draw it in red
             elif occupancy_grid[row,col] == 1:
                 occ_grid_disp.setColor(0xd1022e)
+                occ_grid_disp.fillRectangle(col * cell_width, row * cell_height, cell_width, cell_height)
+
+            # if the cell contains the epuck, draw it in green
+            if (row,col) == epuck_cell:
+                occ_grid_disp.setColor(0x24fc03)
                 occ_grid_disp.fillRectangle(col * cell_width, row * cell_height, cell_width, cell_height)
 
             col_alternator = not col_alternator # flip the alternator before drawing the cell in the next column
@@ -794,7 +806,7 @@ while robot.step(timestep) != -1:
     state_estimate_prime, covariance_prime = time_update(state_estimate)
     state_estimate, covariance, landmark_counter = observation_update(state_estimate_prime, covariance_prime)
 
-    origin_cell_coord, occupancy_grid = calculate_occupancy_grid()
+    origin_cell, epuck_cell, occupancy_grid = calculate_occupancy_grid()
 
     print(f"state_estimate: {state_estimate}")
     print("\n")
@@ -812,7 +824,7 @@ while robot.step(timestep) != -1:
     draw_pose()
     temp_draw_landmarks()
     draw_state_estimate()
-    draw_occupancy_grid(origin_cell_coord, occupancy_grid)
+    draw_occupancy_grid(origin_cell, epuck_cell, occupancy_grid)
 
     pass
 
