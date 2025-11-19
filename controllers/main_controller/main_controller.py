@@ -724,6 +724,52 @@ def temp_draw_landmarks():
         display.fillOval(display_x, display_y, radius, radius)
     return
 
+def draw_occupancy_grid(origin_cell_coord, occupancy_grid):
+    # Visualises the occupancy grid on a display
+    # Unoccupied cells are drawn as alternating shades of grey (for visual differentiation)
+    # Occupied cells are drawn in red
+    # The cell containing the origin is drawn in pink (to make it easier to visually landmark cells in the occupancy grid)
+    #
+    # Throughout epuck movement, the drawn grid may appear to become distorted
+    # This is a consequence of the limited size of the display, and the occupancy grid growing unbalanced in either its number of rows or columns
+    # Despite this visual behaviour, each cell in the occupancy actually represents a square area at all times
+
+
+    # take the number of rows/cols, divide display width by num of rows/cols, that's cell width/height
+    row_count = np.shape(occupancy_grid)[0]
+    col_count = np.shape(occupancy_grid)[1]
+
+    cell_width = display_width / col_count
+    cell_height = display_height / row_count
+
+
+    # iterate through rows, and then through columns, to draw cells one at a time
+    row_alternator = False # first of the two alternators - two are required to ensure that the grey used for empty cells alternates in both row and column directions
+    for row in range(np.shape(occupancy_grid)[0]):
+        col_alternator = row_alternator
+        for col in range(np.shape(occupancy_grid)[1]):
+            # draw in cell as grey first for case where cell is free
+            if col_alternator:
+                occ_grid_disp.setColor(0xbbbdbf)
+                occ_grid_disp.fillRectangle(col * cell_width, row * cell_height, cell_width, cell_height)
+            else:
+                occ_grid_disp.setColor(0x9b9d9e)
+                occ_grid_disp.fillRectangle(col * cell_width, row * cell_height, cell_width, cell_height)
+
+            # if the cell contains the origin, draw it in pink
+            if (row,col) == origin_cell_coord:
+                occ_grid_disp.setColor(0xbf22bd)
+                occ_grid_disp.fillRectangle(col * cell_width, row * cell_height, cell_width, cell_height)
+            # if the cell is believed to be occupied, draw it in red
+            elif occupancy_grid[row,col] == 1:
+                occ_grid_disp.setColor(0xd1022e)
+                occ_grid_disp.fillRectangle(col * cell_width, row * cell_height, cell_width, cell_height)
+
+            col_alternator = not col_alternator # flip the alternator before drawing the cell in the next column
+        row_alternator = not row_alternator # flip the alternator before drawing the cell in the next row
+
+    return
+
 def clean_displays():
     # removes anything not explicitly drawn this time-step on the display
     display.setColor(0xffffff)  # make display background white
@@ -766,6 +812,7 @@ while robot.step(timestep) != -1:
     draw_pose()
     temp_draw_landmarks()
     draw_state_estimate()
+    draw_occupancy_grid(origin_cell_coord, occupancy_grid)
 
     pass
 
