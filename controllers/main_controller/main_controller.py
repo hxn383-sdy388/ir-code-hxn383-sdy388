@@ -501,6 +501,8 @@ def calculate_occupancy_grid():
     #
     # Dimensions: m is the number of cells on the horizontal axis of the occupancy grid, n is the number on the vertical axis
     #
+    # The occupancy grid is initialised as a 3x3 grid, with the origin taken as the centre of the middle cell
+    #
     # Because the occupancy grid conceptually operates in the Cartesian plane (with the origin taken as the epuck's original position), but is encoded as a matrix without support for negative rows or columns, an origin cell variable is constructed to enable occupancy in negative rows and columns to be represented as well as in positive ones
     #
     # The matrix is initially constructed where direction of row growth corresponds to an increase in the Cartesian y coordinate of occupancy values
@@ -524,11 +526,11 @@ def calculate_occupancy_grid():
 
     # iterate through the state estimate and find the bounding coordinates
     # also set a minimum size, so that cells are drawn initially
-    # 0.1 in all directions, and a cell size of 0.05 (what's currently in the CELL_SIZE global), means that with one more cell added on for the origin, the grid will initially be 3x3
-    min_m = -0.1 # implementation steps later on require this to be a negative value
-    max_m = 0.1
-    min_n = -0.1 # implementation steps later on require this to be a negative value
-    max_n = 0.1
+    # 2 cell lengths in all directions, plus the one cell in the middle for the origin, means that the grid will initially be 3xe
+    min_m = -(2 * CELL_SIZE) # steps later on require this to be a negative value
+    max_m = 2 * CELL_SIZE
+    min_n = -(2 * CELL_SIZE) # steps later on require this to be a negative value
+    max_n = 2 * CELL_SIZE
 
     i = 0
     while i < len(state_estimate):
