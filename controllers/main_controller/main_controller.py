@@ -757,26 +757,24 @@ def draw_occupancy_grid(origin_cell, epuck_cell, occupancy_grid):
     for row in range(np.shape(occupancy_grid)[0]):
         col_alternator = row_alternator
         for col in range(np.shape(occupancy_grid)[1]):
+            # if the cell contains the epuck, draw it in green
+            if (row, col) == epuck_cell:
+                occ_grid_disp.setColor(0x24fc03)
+                occ_grid_disp.fillRectangle(col * cell_width, row * cell_height, cell_width, cell_height)
+            # if the cell contains the origin, draw it in pink
+            elif (row, col) == origin_cell:
+                occ_grid_disp.setColor(0xbf22bd)
+                occ_grid_disp.fillRectangle(col * cell_width, row * cell_height, cell_width, cell_height)
+            # if the cell is believed to be occupied, draw it in red
+            elif occupancy_grid[row, col] == 1:
+                occ_grid_disp.setColor(0xd1022e)
+                occ_grid_disp.fillRectangle(col * cell_width, row * cell_height, cell_width, cell_height)
             # draw in cell as grey first for case where cell is free
-            if col_alternator:
+            elif col_alternator:
                 occ_grid_disp.setColor(0xbbbdbf)
                 occ_grid_disp.fillRectangle(col * cell_width, row * cell_height, cell_width, cell_height)
             else:
                 occ_grid_disp.setColor(0x9b9d9e)
-                occ_grid_disp.fillRectangle(col * cell_width, row * cell_height, cell_width, cell_height)
-
-            # if the cell contains the origin, draw it in pink
-            if (row,col) == origin_cell:
-                occ_grid_disp.setColor(0xbf22bd)
-                occ_grid_disp.fillRectangle(col * cell_width, row * cell_height, cell_width, cell_height)
-            # if the cell is believed to be occupied, draw it in red
-            elif occupancy_grid[row,col] == 1:
-                occ_grid_disp.setColor(0xd1022e)
-                occ_grid_disp.fillRectangle(col * cell_width, row * cell_height, cell_width, cell_height)
-
-            # if the cell contains the epuck, draw it in green
-            if (row,col) == epuck_cell:
-                occ_grid_disp.setColor(0x24fc03)
                 occ_grid_disp.fillRectangle(col * cell_width, row * cell_height, cell_width, cell_height)
 
             col_alternator = not col_alternator # flip the alternator before drawing the cell in the next column
