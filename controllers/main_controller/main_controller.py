@@ -131,8 +131,6 @@ def cam_recog_measure_landmarks():
 
     recognised_objects = camera.getRecognitionObjects()
     for object in recognised_objects:
-        index = int(object.getModel()) # this is the correspondence of the landmark
-
         rel_x, rel_y, rel_z = object.getPosition() # position is relative to the epuck
 
         distance = np.hypot(float(rel_y), float(rel_x)) # calculate straight line distance between epuck and recognised landmark
@@ -140,7 +138,7 @@ def cam_recog_measure_landmarks():
         alpha = np.arctan2(rel_y, rel_x) # calculate the relative bearing between the epuck and landmark
         alpha = np.arctan2(np.sin(alpha), np.cos(alpha)) # bound the bearing to be between -pi and +pi
 
-        z.append(((float(distance), float(alpha), 0), index))
+        z.append((float(distance), float(alpha), 0))
 
     return z
 

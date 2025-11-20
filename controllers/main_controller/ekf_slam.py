@@ -181,9 +181,8 @@ class EkfSlamController:
         n_t = self.landmark_counter
 
         # outer loop - iterate through the measurements
-        for ((distance, alpha, signature), correspondence) in z_t:
-            measurement = np.array([[distance], [alpha],
-                                    [signature]])  # re-pack so vector can be used later for getting the delta between the actual measurement and the expected measurement
+        for (distance, alpha, signature) in z_t:
+            measurement = np.array([[distance], [alpha], [signature]])  # re-pack so vector can be used later for getting the delta between the actual measurement and the expected measurement
 
             # line 9
             # speculate that the measurement corresponds to an unseen landmark, and take its position relative to the current estimated pose of the epuck
