@@ -15,7 +15,7 @@ LEFT = 0 # used to refer to the left wheel's motor in the speed
 RIGHT = 1
 PIXELS_PER_METRE = 100 # ratio of pixels per metre - i.e. 1 pixels corresponds to 1cm
 
-CELL_SIZE = 0.05 # (5cm) - the cell side length measurement for the occupancy grid encoding of the state estimate
+
 
 
 # ---------- PARAMETERS ----------
@@ -158,126 +158,6 @@ def cam_recog_measure_landmarks():
         z.append(((float(distance), float(alpha), 0), index))
 
     return z
-
-def calculate_occupancy_grid():
-    # The occupancy grid is a matrix where each entry corresponds to a cell in the grid
-    # If the cell contains a 0, the cell is believed to be unoccupied by landmarks - ie. the epuck can enter it
-    # If the cell contains a 1, the cell is believed to be occupied by landmarks 0 ie. the epuck should not attempt to enter it
-    #
-    # Dimensions: m is the number of cells on the horizontal axis of the occupancy grid, n is the number on the vertical axis
-    #
-    # The occupancy grid is initialised as a 3x3 grid, with the origin taken as the centre of the middle cell
-    #
-    # Because the occupancy grid conceptually operates in the Cartesian plane (with the origin taken as the epuck's original position), but is encoded as a matrix without support for negative rows or columns, an origin cell variable is constructed to enable occupancy in negative rows and columns to be represented as well as in positive ones
-    #
-    # The matrix is initially constructed where direction of row growth corresponds to an increase in the Cartesian y coordinate of occupancy values
-    # This behaviour is the same for columns and Cartesian x coordinates
-    # However, for providing a more glanceable grid on printing/display, the matrix has been flipped about the horizontal direction
-    # This means that in the top-left (0,0) of the matrix is the negative,positive quadrant of the Cartesian plane, and in the bottom-right (n,m) is the positive,negative quadrant of the Cartesian plane
-    # Of course, this means that the cell containing the origin lies (initially) centrally in this matrix encoding
-    #
-    # The occupancy grid is completely re-calculated every time step, as it relies directly on the combined state estimate vector
-    # The combined state estimator vector's values are calculated under the Markov assumption
-    # Hence, at each timestep, the prior state of the occupancy grid should not influence the current state of the occupancy grid
-    # Practically speaking, this is required so as to not hold prior occupancy values as truth when their estimates may have been updated in the EKF-SLAM process
-    #
-    # This means that the occupancy grid may shrink out unoccupied space over time
-    # For example, in development, when driving the epuck around a 1x1 metre grid with only four landmarks, in many timesteps the epuck wouldn't perceive a landmark, and hence would be driving in open space
-    # This would be reflected in the occupancy grid with 0's being filled in for the epuck's pose
-    # However, when the epuck left the empty space, and it didn't fall within the minimum bounds set for the grid, these cells would be removed from the grid
-    # This behaviour is intended, and stems from my decision to carry the Markov assumption through to the occupancy grid based on it's dependency on the state estimate
-
-    # ------------------------------
-
-    # iterate through the state estimate and find the bounding coordinates
-    # also set a minimum size, so that cells are drawn initially
-    # 2 cell lengths in all directions, plus the one cell in the middle for the origin, means that the grid will initially be 3xe
-    min_m = -(2 * CELL_SIZE) # steps later on require this to be a negative value
-    max_m = 2 * CELL_SIZE
-    min_n = -(2 * CELL_SIZE) # steps later on require this to be a negative value
-    max_n = 2 * CELL_SIZE
-
-    i = 0
-    while i < len(state_estimate):
-        if state_estimate[i] < min_m:
-            min_m = state_estimate[i]
-        if state_estimate[i] > max_m:
-            max_m = state_estimate[i]
-
-        if state_estimate[i + 1] < min_n:
-            min_n = state_estimate[i + 1]
-        if state_estimate[i + 1] > max_n:
-            max_n = state_estimate[i+1]
-
-        i += 3 # 3 components per state estimate vector entry for epuck pose and landmarks
-
-
-    # take the number of rows and columns either side of the origin as the minimum values to over-shoot the bounding coordinates, so that no landmark cannot be encoded within a grid cell
-    # half a cell side length is taken off to account for the cell that's explicitly added for the origin coord to lie in
-    # (ie. half of the origin cell lies in each of the Cartesian quadrants)
-    left_of_origin_cols = int(np.ceil((np.abs(min_m) - (0.5 * CELL_SIZE)) / CELL_SIZE)) # abs so this quantity is positive
-    right_of_origin_cols = int(np.ceil((max_m - (0.5 * CELL_SIZE)) / CELL_SIZE))
-
-    below_origin_rows = int(np.ceil((np.abs(min_n) - (0.5 * CELL_SIZE)) / CELL_SIZE))  # abs so this quantity is positive
-    above_origin_rows = int(np.ceil((max_n - (0.5 * CELL_SIZE)) / CELL_SIZE))
-
-    # take the total row and column counts as one more than the respective counts on either side of the origin, so that there's explicitly a cell for the origin coord to lie in
-    row_count = below_origin_rows + above_origin_rows + 1
-    col_count = left_of_origin_cols + right_of_origin_cols + 1
-
-
-    # initialise the matrix with zeros - ie. all cells unoccupied unless explicitly set to be occupied
-    occupancy_grid = np.full((row_count, col_count), 0)
-
-
-    # populate cell that epuck centre is in as free - epuck has been able to drive into it, so probably doesn't contain a landmark
-    epuck_x = state_estimate[0]
-    epuck_y = state_estimate[1]
-
-    # calculate what proportion of the way it falls between the distance representable in the number of columns and rows determined required
-    x_dist = col_count * CELL_SIZE
-    epuck_x_dist = epuck_x - (-1 * (left_of_origin_cols + 0.5) * CELL_SIZE) # 0.5 here to account for the half a cell side length held in the negative x quadrant by the origin cell
-    x_proportion = epuck_x_dist / x_dist
-    col_pos = int(np.floor(x_proportion * col_count)) # take the floor as if it's 4.3/10 cols for example, want to declare it as in a cell in column 4 - this also takes care of converting this from a count to an index
-
-    y_dist = row_count * CELL_SIZE
-    epuck_y_dist = epuck_y - (-1 * (below_origin_rows + 0.5) * CELL_SIZE) # 0.5 here to account for the half a cell side length held in the negative y quadrant by the origin cell
-    y_proportion = epuck_y_dist / y_dist
-    row_pos = int(np.floor(y_proportion * row_count))
-
-    epuck_cell = (row_count - row_pos - 1, col_pos) # need to augment the row pos because the occupancy matrix will be later flipped vertically for intuition wrt. the Cartesian plane when printed/displayed
-
-    occupancy_grid[row_pos, col_pos] = 0 # 0 for free
-
-
-    # iterate through the landmarks and apply the same logic as above for the epuck, but filling in 1 for each landmark instead of 0, to indicate cell not free
-    i = 3 # first three state estimate vector components correspond to epuck pose - fourth element is where landmarks (if any) start
-    while i < len(state_estimate):
-        landmark_x = state_estimate[i]
-        landmark_y = state_estimate[i+1]
-
-        x_dist = col_count * CELL_SIZE
-        landmark_x_dist = landmark_x - (-1 * (left_of_origin_cols + 0.5) * CELL_SIZE) # 0.5 here to account for the half a cell side length held in the negative x quadrant by the origin cell
-        x_proportion = landmark_x_dist / x_dist
-        col_pos = int(np.floor(x_proportion * col_count))
-
-        y_dist = row_count * CELL_SIZE
-        landmark_y_dist = landmark_y - (-1 * (below_origin_rows + 0.5) * CELL_SIZE) # 0.5 here to account for the half a cell side length held in the negative y quadrant by the origin cell
-        y_proportion = landmark_y_dist / y_dist
-        row_pos = int(np.floor(y_proportion * row_count))
-
-        occupancy_grid[row_pos,col_pos] = 1
-
-        i += 3
-
-
-    # flip in the up/down direction to get negative columns at the bottom rather than at the top for when printing out - less disturbing to look at
-    occupancy_grid = np.flipud(occupancy_grid)
-
-    # the origin cell row index is now given by the number of above origin rows - because it's one more than this count, hence taking it without +1 is fine, and it's above origin row count rather than below because of the flip done to the matrix to make it more intuitive for when printed out
-    origin_cell = (above_origin_rows, left_of_origin_cols)
-
-    return origin_cell, epuck_cell, occupancy_grid
 
 # Convenience
 def rad_to_deg(rads):
@@ -470,7 +350,7 @@ while robot.step(timestep) != -1:
     # Process sensor data
     state_estimate, covariance = ekf_slam_controller.run_steps(u_t, z_t)
 
-    origin_cell, epuck_cell, occupancy_grid = calculate_occupancy_grid()
+    origin_cell, epuck_cell, occupancy_grid = ekf_slam_controller.construct_occupancy_grid()
 
     print(f"state_estimate: {state_estimate}")
     print("\n")
