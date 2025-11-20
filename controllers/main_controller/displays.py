@@ -127,8 +127,8 @@ class DisplayController:
         row_count = np.shape(occupancy_grid)[0]
         col_count = np.shape(occupancy_grid)[1]
 
-        cell_width = self.display_width / col_count
-        cell_height = self.display_height / row_count
+        cell_width = self.occ_grid_disp_width / col_count
+        cell_height = self.occ_grid_disp_height / row_count
 
         # iterate through rows, and then through columns, to draw cells one at a time
         row_alternator = False  # first of the two alternators - two are required to ensure that the grey used for empty cells alternates in both row and column directions
