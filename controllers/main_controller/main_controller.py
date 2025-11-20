@@ -144,17 +144,6 @@ def cam_recog_measure_landmarks():
 
     return z
 
-# Convenience
-def rad_to_deg(rads):
-    # convenience function
-    degs = rads * (180.0 / np.pi)
-    return degs
-
-def deg_to_rad(degs):
-    # convenience function
-    rads = degs * (np.pi / 180.0)
-    return rads
-
 # Robot actuation
 def set_speed():
     # update motors with value in speed list
