@@ -28,6 +28,7 @@ class EkfSlamController:
     Q distance uncertainties currently set to half the radius of the landmark objects.
     '''
     Q = np.diag([0.015, 0.015, 0.000000001])
+    # Q = np.diag([0.000000001, 0.000000001, 0.000000001]) <-- this caused mahalanobis distance to blow up for the correct existing landmark, making it larger than alpha threshold, creating new landmarks erroneously
 
     '''
     Diagonal elements on the covariance matrix corresponding to landmarks are initialised to a large value, to model that the initial positions of the landmarks are unknown.
@@ -179,11 +180,9 @@ class EkfSlamController:
 
         # define a locally-scoped counter used to track how many new landmarks are created
         n_t = self.landmark_counter
-
         # outer loop - iterate through the measurements
         for (distance, alpha, signature) in z_t:
             measurement = np.array([[distance], [alpha], [signature]])  # re-pack so vector can be used later for getting the delta between the actual measurement and the expected measurement
-
             # line 9
             # speculate that the measurement corresponds to an unseen landmark, and take its position relative to the current estimated pose of the epuck
             landmark_estimate = np.array([state_estimate_bar[0], state_estimate_bar[1], [0]]) + (distance * np.array(
@@ -224,13 +223,13 @@ class EkfSlamController:
                 heading_est_k = np.atan2(delta_ky, delta_kx) - state_estimate_speculation[2, 0]
                 estimated_measurement_k = np.array(
                     [[np.sqrt(q_k)], [np.arctan2(np.sin(heading_est_k), np.cos(heading_est_k))],
-                     state_estimate_speculation[3 + k + 2]])
+                     state_estimate_speculation[3 + (3 * k) + 2]])
 
                 # line 14
                 # selector matrix used to apply the jacobian of the measurement model w.r.t the combined state vector to only the elements that correspond to the epuck pose and current landmark k
                 f_xk = np.zeros((6, 3 + 3 * (n_t + 1)))
                 f_xk[:3, :3] = np.eye(3)  # select elements corresponding to epuck pose
-                f_xk[3:, 3 + (2 * k) - 2:3 + (2 * k) - 2 + 3] = np.eye(
+                f_xk[3:, 3 + (3 * k):3 + (3 * k) + 3] = np.eye(
                     3)  # select elements corresponding to current landmark k
 
                 # line 15
@@ -315,38 +314,26 @@ class EkfSlamController:
 
         # (out of outer for-loop)
         # preparation for lines 24 and 25
-        if n_t > self.landmark_counter:
-            # ie. at least one measurement has been interpreted as a new landmark
+        for i in range(0, len(kalman_gains)):  # can use the kalman gains for the index, as each of these lists will have the same number of elements (one per measurement)
+            # cols need expanding to num of cols in state est
+            while np.shape(kalman_gains[i])[0] < np.shape(state_estimate_bar)[0]:
+                kalman_gains[i] = np.vstack([kalman_gains[i], np.zeros((1, kalman_gains[i].shape[1]))])
+            while np.shape(kalman_gains[i])[0] > np.shape(state_estimate_bar)[0]:
+                kalman_gains[i] = kalman_gains[i][:-3, :]  # remove the last three rows
+                # print("trimmed A")
 
-            # therefore:
-            #   - need to step up the dimensions of the kalman gain matrices to have the correct number of rows to have entries for all new landmarks, so that matrix calculations can proceed correctly
-            #   - need to step up the dimensions of the measurement jacobian matrices to have the correct number of columns to have entries for all new landmarks, so that matrix calculations can proceed correctly
+            # step up measurement jacobians - rows need expanding to num of cols in state est:
+            extra_cols = np.shape(state_estimate_bar)[0] - np.shape(measurement_jacobians[i])[1]
+            if extra_cols > 0:
+                measurement_jacobians[i] = np.hstack([
+                    measurement_jacobians[i],
+                    np.zeros((measurement_jacobians[i].shape[0], extra_cols))
+                ])
 
-            for i in range(0,
-                           len(kalman_gains)):  # can use the kalman gains for the index, as each of these lists will have the same number of elements (one per measurement)
-                # cols need expanding to num of cols in state est
-                while np.shape(kalman_gains[i])[0] < np.shape(state_estimate_bar)[0]:
-                    kalman_gains[i] = np.vstack([kalman_gains[i], np.zeros((1, kalman_gains[i].shape[1]))])
-
-                # step up measurement jacobians - rows need expanding to num of cols in state est:
-                extra_cols = np.shape(state_estimate_bar)[0] - np.shape(measurement_jacobians[i])[1]
-                if extra_cols > 0:
-                    measurement_jacobians[i] = np.hstack([
-                        measurement_jacobians[i],
-                        np.zeros((measurement_jacobians[i].shape[0], extra_cols))
-                    ])
-        else:
-            # ie. no measurements were interpreted as a new landmark
-
-            # therefore:
-            #   - need to trim the number of rows on the kalman gain matrices to remove the last three rows which correspond to how the new measurement (for the iteration this matrix belongs to) was speculated to be a new landmark, so that matrix calculations can proceed correctly under the assumption that this measurement corresponds to an existing landmark
-            #   - need to trim the number of columns on the measurement jacobian matrices to remove the last three rows which correspond to how the new measurement (for the iteration this matrix belongs to) was speculated to be a new landmark, so that matrix calculations can proceed correctly under the assumption that this measurement corresponds to an existing landmark
-
-            for i in range(0, len(measurement_jacobians)):
-                if np.shape(kalman_gains[i])[0] > np.shape(state_estimate_bar)[0]:
-                    kalman_gains[i] = kalman_gains[i][:-3, :]  # remove the last three rows
-
+            # trim columns off of measurement jacobian
+            while np.shape(measurement_jacobians[i])[1] > np.shape(state_estimate_bar)[0]:
                 measurement_jacobians[i] = measurement_jacobians[i][:, :-3]  # remove last three columns
+
 
         # lines 24 and 25
         # initialise the return values
@@ -356,8 +343,7 @@ class EkfSlamController:
         if len(measurement_deltas) > 0:
             intermediate_var = np.zeros(np.shape(np.dot(kalman_gains[0], measurement_jacobians[0])))
             for i in range(0, len(measurement_deltas)):
-                updated_state_estimate += np.dot(kalman_gains[i], measurement_deltas[
-                    i])  # implements functionality on line 24 - updates state estimate
+                updated_state_estimate += np.dot(kalman_gains[i], measurement_deltas[i])  # implements functionality on line 24 - updates state estimate
                 intermediate_var += np.dot(kalman_gains[i], measurement_jacobians[i])
 
             updated_covariance = np.dot((np.eye(intermediate_var.shape[0]) - intermediate_var),
