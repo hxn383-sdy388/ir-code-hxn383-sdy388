@@ -23,8 +23,8 @@ SPEED_INCREMENT = 4
 
 # ---------- VARIABLES & DATA STRUCTURES ----------
 speed = [0,0] # list for controlling the speed - done this way control speed using encoder steps rather than target velocity directly
-x_t = [0,0,0] # list for storing pose at current time $ t $, in the format [$ x $, $ y $, $ \theta $]
-u_t = [0,0] # list for storing the control applied at time $ t - 1 $ to drive the epuck to pose $ \vec{x}_t $ at time $ t $. Elements: linear velocity, angular velocity
+x_t = [0,0,0] # list for storing pose at current time t, in the format [x, y, theta]
+u_t = [0,0] # list for storing the control applied at time t - 1 to drive the epuck to pose x_t at time t. Elements: linear velocity, angular velocity
 z_t = [] # list for landmark measurements, where each element is of the form (distance, bearing from epuck, correspondence)
 
 
@@ -77,10 +77,11 @@ display_controller = DisplayController(robot)
 # EKF-SLAM
 def get_pose():
     # goal:
-    #   - return a vector $ x_t $ which represents the e-puck pose at the current time step $ t $
-    #   - the pose consists of an $ x $ coordinate, a $ z $ coordinate, and a heading $ \theta $
-    #       - $ \theta $ is taken as the angle in degrees above the $ x $ axis
-    #   - the $ z $ coordinate has been omitted from the pose, as it has been decided to constrain the e-puck to flat surfaces (i.e. $ z = 0 $) for scope management
+    #   - return a vector x_t which represents the e-puck pose at the current time step t
+    #   - the pose consists of an x coordinate, a z coordinate, and a heading theta
+    #       - theta is taken as the angle in degrees above the x-axis
+    #   - the z coordinate has been omitted from the pose, as it has been decided to constrain the e-puck to flat
+    #           surfaces (i.e. z = 0) for scope management
 
     # get absolute position
     x , y , z = translation.getSFVec3f()
@@ -88,10 +89,11 @@ def get_pose():
     x_t[1] = y
 
     # get orientation
-    # rot_axis_x and rot_axis_y will be close to 0, and rot_axis_z will be close to 1, as the epuck will be rotating about the vertical axis
+    # rot_axis_x and rot_axis_y will be close to 0, and rot_axis_z will be close to 1, as the epuck will be rotating
+    # about the vertical axis
     rot_axis_x, rot_axis_y, rot_axis_z, theta = rotation.getSFRotation()
 
-    # heading (relative to $ x $ axis) is in radians
+    # heading (relative to x-axis) is in radians
     theta = np.arctan2(np.sin(theta), np.cos(theta)) # bound it
 
     # check if the axis of rotation around z has become negative
@@ -106,8 +108,9 @@ def get_pose():
 
 def get_control():
     # goal:
-    #   - populate the control vector $ \vec{u}_t $
-    #   - this should be the control applied to the epuck at time $ t - 1 $ to yield the epuck being at state $ \vec{x}_t $ at current time $ t $
+    #   - populate the control vector u_t
+    #   - this should be the control applied to the epuck at time t - 1 to yield the epuck being at state x_t at
+    #           current time t
 
     # get the velocity from the epuck
     velocity = epuck_node.getVelocity()
@@ -119,7 +122,7 @@ def get_control():
     # linear velocity is in metres/second
     u_t[0] = vx * np.cos(x_t[2]) + vy * np.sin(x_t[2]) # use with signed velocity to cope with the epuck reversing
 
-    # angular velocity ($ \omega $) is the velocity of rotation about the z (vertical) axis
+    # angular velocity (omega) is the velocity of rotation about the z (vertical) axis
     # therefore, angular velocity is in radians/second
     u_t[1] = wz
     return
@@ -133,7 +136,7 @@ def cam_recog_measure_landmarks():
     for object in recognised_objects:
         rel_x, rel_y, rel_z = object.getPosition() # position is relative to the epuck
 
-        distance = np.hypot(float(rel_y), float(rel_x)) # calculate straight line distance between epuck and recognised landmark
+        distance = np.hypot(float(rel_y), float(rel_x)) # calculate straight line distance between epuck and landmark
 
         alpha = np.arctan2(rel_y, rel_x) # calculate the relative bearing between the epuck and landmark
         alpha = np.arctan2(np.sin(alpha), np.cos(alpha)) # bound the bearing to be between -pi and +pi

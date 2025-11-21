@@ -44,7 +44,8 @@ class DisplayController:
         # convert world coordinates to display coordinates
         # in the environment, x is right, y is up, whereas on the display, x is right, y is down
         display_x = int(self.display_origin_x + x * self.PIXELS_PER_METRE)
-        display_y = int(self.display_origin_y - y * self.PIXELS_PER_METRE)  # subtract because of display y direction being opposite to world y direction
+        display_y = int(self.display_origin_y - y * self.PIXELS_PER_METRE)
+        # (above) subtract because of display y direction being opposite to world y direction
 
         return display_x, display_y
 
@@ -54,7 +55,10 @@ class DisplayController:
         # draw epuck body
         self.display.setColor(0x1026cc)
         epuck_radius = 0.037 * self.PIXELS_PER_METRE  # epuck has 7.4cm diameter => 0.037m radius
-        display_x, display_y = self.world_coords_to_display_cords(x_t[0], x_t[1])  # convert world coordinates to display coordinates
+
+        # subtract because of display y direction being opposite to world y direction
+        display_x, display_y = self.world_coords_to_display_cords(x_t[0], x_t[1])
+
         self.display.fillOval(display_x, display_y, epuck_radius, epuck_radius)
 
         # draw heading of epuck
@@ -70,8 +74,10 @@ class DisplayController:
         # draw epuck body
         self.display.setColor(0x24fc03)
         epuck_radius = 0.037 * self.PIXELS_PER_METRE  # epuck has 7.4cm diameter => 0.037m radius
-        display_x, display_y = self.world_coords_to_display_cords(state_estimate[0], state_estimate[
-            1])  # convert world coordinates to display coordinates
+
+        # convert world coordinates to display coordinates
+        display_x, display_y = self.world_coords_to_display_cords(state_estimate[0], state_estimate[1])
+
         self.display.fillOval(display_x, display_y, epuck_radius, epuck_radius)
 
         # draw heading of epuck
@@ -88,7 +94,10 @@ class DisplayController:
 
             if not (np.isnan(landmark_x)) and not (np.isnan(landmark_y)):
                 self.display.setColor(0xbf22bd)
-                disp_x, disp_y = self.world_coords_to_display_cords(landmark_x, landmark_y)  # convert world coordinates to display coordinates
+
+                # convert world coordinates to display coordinates
+                disp_x, disp_y = self.world_coords_to_display_cords(landmark_x, landmark_y)
+
                 self.display.fillOval(disp_x, disp_y, 1, 1)
 
             i += 3
@@ -96,30 +105,45 @@ class DisplayController:
         return
 
     def temp_draw_landmarks(self):
-        # temporary function - draws on display the true location of landmarks so that it can be seen how well the EKF-SLAM algorithm is mapping landmarks
-        landmarks = [(-0.25, 0.25, 0), (0.25, 0.25, 0), (-0.25, -0.25, 0),
-                     (0.25, -0.25, 0)]  # coords of the landmarks actually in the environment
+        # temporary function - draws on display the true location of landmarks so that it can be seen
+        # how well the EKF-SLAM algorithm is mapping landmarks
+        # ie. coords of the landmarks actually in the environment
+        landmarks = [(-0.25, 0.25, 0), (0.25, 0.25, 0), (-0.25, -0.25, 0),(0.25, -0.25, 0)]
 
         for x, y, signature in landmarks:
             self.display.setColor(0x3d3527)
-            display_x, display_y = self.world_coords_to_display_cords(x, y)  # convert world coordinates to display coordinates
-            radius = 0.03 * self.PIXELS_PER_METRE  # environment cylinder objects currently have 0.03 radius
+
+            # convert world coordinates to display coordinates
+            display_x, display_y = self.world_coords_to_display_cords(x, y)
+
+            radius = 0.03 * self.PIXELS_PER_METRE # environment cylinder objects currently have 0.03 radius
+
             self.display.fillOval(display_x, display_y, radius, radius)
         return
 
     def draw_occupancy_grid(self, origin_cell, epuck_cell, occupancy_grid):
         # Visualises the occupancy grid on a display
+        #
         # Unoccupied cells are drawn as alternating shades of grey (for visual differentiation)
+        #
         # Occupied cells are drawn in red
-        # The cell containing the origin is drawn in pink (to make it easier to visually landmark cells in the occupancy grid)
+        #
+        # The cell containing the origin is drawn in pink (to make it easier to visually landmark cells in the
+        # occupancy grid)
+        #
         # The cell currently occupied by the centre of the epuck is drawn in green
         #
         # Throughout epuck movement, the drawn grid may appear to become distorted
-        # This is a consequence of the limited size of the display, and the occupancy grid growing unbalanced in either its number of rows or columns
+        #
+        # This is a consequence of the limited size of the display, and the occupancy grid growing unbalanced in either
+        # its number of rows or columns
+        #
         # Despite this visual behaviour, each cell in the occupancy actually represents a square area at all times
         #
         # Another visual anomaly may be white lines appearing between grid cells on the display
-        # This attributable to precision issues mapping points from within the occupancy grid space to the display space, where the former's size is dynamic and unlimited, and the latter is static and (hence) limited
+        #
+        # This attributable to precision issues mapping points from within the occupancy grid space to the display
+        # space, where the former's size is dynamic and unlimited, and the latter is static and (hence) limited
 
         # ------------------------------
 
@@ -130,8 +154,11 @@ class DisplayController:
         cell_width = self.occ_grid_disp_width / col_count
         cell_height = self.occ_grid_disp_height / row_count
 
+
         # iterate through rows, and then through columns, to draw cells one at a time
-        row_alternator = False  # first of the two alternators - two are required to ensure that the grey used for empty cells alternates in both row and column directions
+
+        # first of the two alternators - two so that grey used for empty cells alternates in both row and col directions
+        row_alternator = False
         for row in range(np.shape(occupancy_grid)[0]):
             col_alternator = row_alternator
             for col in range(np.shape(occupancy_grid)[1]):
