@@ -312,50 +312,51 @@ class EkfSlamController:
             measurement_deltas.append(intermediate_deltas[j_i])
             measurement_jacobians.append(intermediate_h_jacobians[j_i])
 
+
+            # (still in the outer for-loop)
+            # preparation for lines 24 and 25
+            # in the textbook, logic beyond here lies outside the outer for-loop
+            # however, I've moved it inside so that each measurement is processed after the correction step taken by processing the previous measurement
+            # previously, when implemented exactly as set out in Table 10.2 of Probabilistic Robotics, the system was behaving erratically, with landmark estimates being highly unstable over time
+            # with this change, each measurement that is processed now benefits from the uncertainty improvement made from the previous, as the state estimate and covariance are updated inline, rather than in a batch fashion at the end
+
+            for i in range(0, len(kalman_gains)):  # can use the kalman gains for the index, as each of these lists will have the same number of elements (one per measurement)
+                # cols need expanding to num of cols in state est
+                while np.shape(kalman_gains[i])[0] < np.shape(state_estimate_bar)[0]:
+                    kalman_gains[i] = np.vstack([kalman_gains[i], np.zeros((1, kalman_gains[i].shape[1]))])
+                while np.shape(kalman_gains[i])[0] > np.shape(state_estimate_bar)[0]:
+                    kalman_gains[i] = kalman_gains[i][:-3, :]  # remove the last three rows
+
+                # step up measurement jacobians - rows need expanding to num of cols in state est:
+                extra_cols = np.shape(state_estimate_bar)[0] - np.shape(measurement_jacobians[i])[1]
+                if extra_cols > 0:
+                    measurement_jacobians[i] = np.hstack([
+                        measurement_jacobians[i],
+                        np.zeros((measurement_jacobians[i].shape[0], extra_cols))
+                    ])
+
+                # trim columns off of measurement jacobian
+                while np.shape(measurement_jacobians[i])[1] > np.shape(state_estimate_bar)[0]:
+                    measurement_jacobians[i] = measurement_jacobians[i][:, :-3]  # remove last three columns
+
+
+            # logic for lines 24 and 25
+            if len(measurement_deltas) > 0:
+                intermediate_var = np.zeros(np.shape(np.dot(kalman_gains[0], measurement_jacobians[0])))
+                for i in range(0, len(measurement_deltas)):
+                    state_estimate_bar += np.dot(kalman_gains[i], measurement_deltas[i])  # implements functionality on line 24 - updates state estimate
+                    intermediate_var += np.dot(kalman_gains[i], measurement_jacobians[i])
+
+                covariance_bar = np.dot((np.eye(intermediate_var.shape[0]) - intermediate_var),
+                                            covariance_bar)  # implements functionality on line 25 - updates state uncertainty
+
+            state_estimate_bar[2, 0] = np.arctan2(np.sin(state_estimate_bar[2, 0]),
+                                                      np.cos(state_estimate_bar[2, 0]))
         # (out of outer for-loop)
-        # preparation for lines 24 and 25
-        for i in range(0, len(kalman_gains)):  # can use the kalman gains for the index, as each of these lists will have the same number of elements (one per measurement)
-            # cols need expanding to num of cols in state est
-            while np.shape(kalman_gains[i])[0] < np.shape(state_estimate_bar)[0]:
-                kalman_gains[i] = np.vstack([kalman_gains[i], np.zeros((1, kalman_gains[i].shape[1]))])
-            while np.shape(kalman_gains[i])[0] > np.shape(state_estimate_bar)[0]:
-                kalman_gains[i] = kalman_gains[i][:-3, :]  # remove the last three rows
-                # print("trimmed A")
-
-            # step up measurement jacobians - rows need expanding to num of cols in state est:
-            extra_cols = np.shape(state_estimate_bar)[0] - np.shape(measurement_jacobians[i])[1]
-            if extra_cols > 0:
-                measurement_jacobians[i] = np.hstack([
-                    measurement_jacobians[i],
-                    np.zeros((measurement_jacobians[i].shape[0], extra_cols))
-                ])
-
-            # trim columns off of measurement jacobian
-            while np.shape(measurement_jacobians[i])[1] > np.shape(state_estimate_bar)[0]:
-                measurement_jacobians[i] = measurement_jacobians[i][:, :-3]  # remove last three columns
-
-
-        # lines 24 and 25
-        # initialise the return values
-        updated_covariance = covariance_bar
-        updated_state_estimate = state_estimate_bar
-
-        if len(measurement_deltas) > 0:
-            intermediate_var = np.zeros(np.shape(np.dot(kalman_gains[0], measurement_jacobians[0])))
-            for i in range(0, len(measurement_deltas)):
-                updated_state_estimate += np.dot(kalman_gains[i], measurement_deltas[i])  # implements functionality on line 24 - updates state estimate
-                intermediate_var += np.dot(kalman_gains[i], measurement_jacobians[i])
-
-            updated_covariance = np.dot((np.eye(intermediate_var.shape[0]) - intermediate_var),
-                                        covariance_bar)  # implements functionality on line 25 - updates state uncertainty
-
-        updated_state_estimate[2, 0] = np.arctan2(np.sin(updated_state_estimate[2, 0]),
-                                                  np.cos(updated_state_estimate[2, 0]))
-
 
         # update the state of the object
-        self.state_estimate = updated_state_estimate
-        self.covariance = updated_covariance
+        self.state_estimate = state_estimate_bar
+        self.covariance = covariance_bar
         self.landmark_counter = n_t
 
         return
