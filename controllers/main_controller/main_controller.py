@@ -71,7 +71,6 @@ measurement_controller = MeasurementController(robot, timestep)
 
 
 # ---------- FUNCTIONS ----------
-# EKF-SLAM
 def get_pose():
     # goal:
     #   - return a vector x_t which represents the e-puck pose at the current time step t
