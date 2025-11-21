@@ -21,6 +21,17 @@ E-puck {
   controller "<extern>"
   supervisor TRUE
   turretSlot [
+    Lidar {
+      tiltAngle 0.052
+      horizontalResolution 3
+      fieldOfView 0.087
+      verticalFieldOfView 0.01
+      numberOfLayers 1
+      maxRange 0.25
+      defaultFrequency 60
+      minFrequency 60
+      maxFrequency 60
+    }
     Display {
       name "occupancy-grid"
       width 100

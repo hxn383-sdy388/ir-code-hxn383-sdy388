@@ -8,7 +8,7 @@ from controller import Keyboard # for driving in the "explore" phase
 
 from ekf_slam import EkfSlamController
 from displays import DisplayController
-
+from measurements import MeasurementController
 
 # ---------- CONSTANTS ----------
 SPEED_UNIT = 0.00628
@@ -60,17 +60,14 @@ translation = epuck_node.getField('translation')
 rotation = epuck_node.getField('rotation')
 
 
-# get the camera and enable the recognition node
-camera = robot.getDevice('recognitioncamera')
-camera.enable(timestep)
-camera.recognitionEnable(timestep)
-
-
 # initialise the ekf-slam controller object
 ekf_slam_controller = EkfSlamController(timestep)
 
 # initialise the display controller object
 display_controller = DisplayController(robot)
+
+# initialise the measurement controller object
+measurement_controller = MeasurementController(robot, timestep)
 
 
 # ---------- FUNCTIONS ----------
@@ -127,24 +124,6 @@ def get_control():
     u_t[1] = wz
     return
 
-def cam_recog_measure_landmarks():
-    # using the camera's recognition feature, measure the landmark positions
-    # landmarks have been given model tags that represent the correspondences
-    z = [] # measurements
-
-    recognised_objects = camera.getRecognitionObjects()
-    for object in recognised_objects:
-        rel_x, rel_y, rel_z = object.getPosition() # position is relative to the epuck
-
-        distance = np.hypot(float(rel_y), float(rel_x)) # calculate straight line distance between epuck and landmark
-
-        alpha = np.arctan2(rel_y, rel_x) # calculate the relative bearing between the epuck and landmark
-        alpha = np.arctan2(np.sin(alpha), np.cos(alpha)) # bound the bearing to be between -pi and +pi
-
-        z.append((float(distance), float(alpha), 0))
-
-    return z
-
 # Robot actuation
 def set_speed():
     # update motors with value in speed list
@@ -189,7 +168,8 @@ while robot.step(timestep) != -1:
     # Poll sensors
     get_pose()
     get_control()
-    z_t = cam_recog_measure_landmarks()
+    # z_t = measurement_controller.cam_recog_measure_landmarks()
+    z_t = measurement_controller.lidar_measure_landmarks()
 
 
     # Process sensor data
