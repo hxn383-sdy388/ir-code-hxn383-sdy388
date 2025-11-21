@@ -19,4 +19,126 @@ RectangleArena {
 }
 E-puck {
   controller "<extern>"
+  supervisor TRUE
+  turretSlot [
+    Lidar {
+      tiltAngle 0.052
+      horizontalResolution 3
+      fieldOfView 0.087
+      verticalFieldOfView 0.01
+      numberOfLayers 1
+      maxRange 0.25
+      defaultFrequency 60
+      minFrequency 60
+      maxFrequency 60
+    }
+    Display {
+      name "occupancy-grid"
+      width 100
+      height 100
+    }
+    Display {
+      width 100
+      height 100
+    }
+    Camera {
+      name "recognitioncamera"
+      width 128
+      height 96
+      fieldOfView 0.84
+      recognition Recognition {
+        maxRange 0.15
+        maxObjects 32
+        occlusion 1
+      }
+    }
+  ]
+}
+DEF RedLandmark Solid {
+  translation  0.25 -0.25 0.00
+  rotation     0 1 0 0
+  children [
+    Shape {
+      appearance PBRAppearance {
+        baseColor 1 0 0
+        metalness 0
+        roughness 0.5
+      }
+      geometry Cylinder {
+        height 0.15
+        radius 0.03
+      }
+    }
+  ]
+  model "3"
+  recognitionColors [ 1 0 0 ]
+  name "landmark3"
+  boundingObject Cylinder { height 0.12 radius 0.03 }
+  physics Physics { }
+}
+DEF RedLandmark Solid {
+  translation  0.25 0.25 0.00
+  rotation     0 1 0 0
+  children [
+    Shape {
+      appearance PBRAppearance {
+        baseColor 1 0 0
+        metalness 0
+        roughness 0.5
+      }
+      geometry Cylinder {
+        height 0.15
+        radius 0.03
+      }
+    }
+  ]
+  model "0"
+  recognitionColors [ 1 0 0 ]
+  name "landmark0"
+  boundingObject Cylinder { height 0.12 radius 0.03 }
+  physics Physics { }
+}
+DEF RedLandmark Solid {
+  translation  -0.25 0.25 0.00
+  rotation     0 1 0 0
+  children [
+    Shape {
+      appearance PBRAppearance {
+        baseColor 1 0 0
+        metalness 0
+        roughness 0.5
+      }
+      geometry Cylinder {
+        height 0.15
+        radius 0.03
+      }
+    }
+  ]
+  model "1"
+  recognitionColors [ 1 0 0 ]
+  name "landmark1"
+  boundingObject Cylinder { height 0.12 radius 0.03 }
+  physics Physics { }
+}
+DEF RedLandmark Solid {
+  translation  -0.25 -0.25 0.00
+  rotation     0 1 0 0
+  children [
+    Shape {
+      appearance PBRAppearance {
+        baseColor 1 0 0
+        metalness 0
+        roughness 0.5
+      }
+      geometry Cylinder {
+        height 0.15
+        radius 0.03
+      }
+    }
+  ]
+  model "2"
+  recognitionColors [ 1 0 0 ]
+  name "landmark2"
+  boundingObject Cylinder { height 0.12 radius 0.03 }
+  physics Physics { }
 }
