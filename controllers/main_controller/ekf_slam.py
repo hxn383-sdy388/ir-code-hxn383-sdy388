@@ -20,7 +20,7 @@ class EkfSlamController:
     # ie. if the first diagonal element was set to 1, this would correspond to an addition of 1 metre's worth of
     # uncertainty in the x coordinate of the epuck's pose per timestep.
     #
-    NOISE = np.diag([0.000000001, 0.000000001, 0.000000001])  # experimenting with some simulated noise
+    NOISE = np.diag([0.000000001, 0.000000001, 0.000000001])  # very low values due to high confidence in pose data
 
 
     # Units for the first two elements are metres - ie. each of these are just distances.
@@ -28,19 +28,18 @@ class EkfSlamController:
     # ie. for given range and relative bearing measurements, how far off are the actual range and bearing (and
     # signature - but that's expected to be zero in the current configuration) measurements expected to be.
     #
-    # None of these values can be zero or the inverse matrix operation later falls apart.
+    # None of these values can be zero or the matrix inversion operation later falls apart.
     #
-    # Q distance uncertainties currently set to half the radius of the landmark objects.
-    #
-    Q = np.diag([0.015, 0.015, 0.000000001])
-    # Q = np.diag([0.000000001, 0.000000001, 0.000000001]) <-- OLD IMPLEMENTATION: this caused mahalanobis distance to blow up for the correct existing landmark, making it larger than alpha threshold, creating new landmarks erroneously
+    Q = np.diag([0.015, 0.015, 0.000000001]) # currently set to half the radius of the landmark objects.
+    # Q = np.diag([0.000000001, 0.000000001, 0.000000001])
 
 
     # Diagonal elements on the covariance matrix corresponding to landmarks are initialised to a large value, to model
     # that the initial positions of the landmarks are unknown.
     #
-    # In Probabilistic Robots, infinity is used for these values, but instead a relatively large finite value is used
+    # In Probabilistic Robots, infinity is used for these values, but instead a (relatively) large finite value is used
     # here due to computational issues encountered when using infinity.
+    #
     LANDMARK_COVARIANCE_INIT = 100
 
 
@@ -52,7 +51,7 @@ class EkfSlamController:
     # The state estimate vector, notated in Probabilistic Robotics as u_t, is a vector containing first elements of
     # the epuck's pose, and then elements for all the (x,y) coordinates of all landmarks.
     #
-    # The state estimate corresponds to the mean of the multivariate gaussian being used to model the uncertainty in
+    # The state estimate corresponds to the mean of the gaussian distribution being used to model the uncertainty in
     # our belief over pose and landmark positions - ie. the best guess to where the robot is (based on its pose and
     # surrounding landmarks).
     #
@@ -70,9 +69,6 @@ class EkfSlamController:
     #
     # The matrix is initialised as a (3 x 3) matrix of zeros, as there are no initially assumed landmarks, hence the
     # covariance matrix only needs to account for the epuck's pose at t = 0.
-    #
-    # Zeros are filled in on the first three diagonal elements for the epuck's pose, consistent with the initialisation
-    # outlined in Probabilistic Robotics.
     #
     # The diagonal elements correspond to the variances of the uncertainty in x, y, theta, and positions of landmarks.
     #
@@ -104,11 +100,11 @@ class EkfSlamController:
 
 
         # line 4
-        # update the state estimate: $ \bar{u}_t $
+        # update the state estimate: u_t
         # intuition - take the best state estimate from the previous time step, and based on the control u_t, update
         # the state estimate for this time step
 
-        # need to calculate how the epuck's pose will have changed between the last time step t - 1 and now t
+        # need to calculate how the epuck's pose will have changed between the last time step (t - 1) and now (t)
         #
         # the motion model for the epuck will be based on that it's moving with both a value for linear velocity and
         # angular velocity
@@ -122,13 +118,13 @@ class EkfSlamController:
         #   coord, and (y_{t-1} + R(cos theta)) for the y coord
         #
         #   therefore, we can get the updated pose of the epuck with:
-        #       $ x_t = x_{t-1} - R(sin(theta_{t-1})) + R(sin(theta_{t-1} + delta x theta))  ie. the x coord
-        #           is the x coord of the ICC sum the x distance between the ICC and centre of the epuck after it's
-        #           heading has changed by (delta x theta)
-        #       $ y_t = y_{t-1} + R(cos(theta_{t-1})) - R(cos(theta_{t-1} + delta x theta))  ie. the y coord
-        #           is the y coord of the ICC sum the y distance between the ICC and the centre of the epuck after it's
-        #           heading has changed by (delta x theta)
-        #       $ theta_t = theta_{t-1} + delta x theta  ie. the heading of the epuck is it's old heading
+        #       x_t = x_{t-1} - R(sin(theta_{t-1})) + R(sin(theta_{t-1} + delta * theta))  ie. the x-coord
+        #           is the x-coord of the ICC sum the x-distance between the ICC and centre of the epuck after it's
+        #           heading has changed by (delta * theta)
+        #       y_t = y_{t-1} + R(cos(theta_{t-1})) - R(cos(theta_{t-1} + delta * theta))  ie. the y-coord
+        #           is the y-coord of the ICC sum the y-distance between the ICC and the centre of the epuck after it's
+        #           heading has changed by (delta * theta)
+        #       theta_t = theta_{t-1} + delta * theta  ie. the heading of the epuck is it's old heading
         #           sum the change in heading
         #
         #   substituting in that R = linear velocity / angular velocity, gives us the motion model matrix below:
@@ -136,7 +132,7 @@ class EkfSlamController:
         # helper variables
         dt = self.TIMESTEP / 1000  # timestep is in milliseconds, want in seconds
         old_theta = self.state_estimate[
-            2, 0]  # theta is 3'rd element of vector - need to get it from column zero, as it's implemented as a matrix
+            2, 0]  # theta is 3rd element of vector - need to get it from column zero, as it's implemented as a matrix
         delta_theta = u_t[1] * dt  # ie. change in angle is angular velocity multiplied by change in time
 
         # matrix components
@@ -148,7 +144,7 @@ class EkfSlamController:
             motion_model_y = (r * (np.cos(old_theta))) - (r * np.cos(old_theta + delta_theta))
             motion_model_theta = delta_theta
         else:
-            # angle near zero, model as only linear movement
+            # angle near zero, model as strictly linear movement
             motion_model_x = u_t[0] * np.cos(old_theta) * dt
             motion_model_y = u_t[0] * np.sin(old_theta) * dt
             motion_model_theta = 0.0  # angular velocity tends to zero, so heading assumed to not change
@@ -161,14 +157,15 @@ class EkfSlamController:
         updated_state_est = self.state_estimate + np.dot(f_x.T, motion_model_matrix)
 
 
-        # Note that Probabilistic robotics termed y_t as the combined state vector - ie. the pose and landmarks
+        # Note that Probabilistic Robotics termed y_t as the combined state vector - ie. the pose and landmarks
         #
         # Lines 5 and 6 of the textbook algorithm are responsible for updating the state uncertainty with respect to
         # the motion model and random noise
 
 
-        # Line 5 defines G_t - an auxiliary matrix constructed by taking the Jacobian of the state model, where the
-        # only non-zero elements are the first derivatives of the x and y motion model components w.r.t theta
+        # Line 5 defines G_t - an auxiliary matrix constructed by taking the Jacobian (matrix of all first-order
+        # partial derivatives) of the state model, where the only non-zero elements are the first derivatives of
+        # the x and y motion model components w.r.t theta
         #
         # ie. The non-zero elements model how the x and y coords of the epuck are changing
         #
@@ -180,16 +177,17 @@ class EkfSlamController:
         if np.abs(u_t[1]) > 0.0001:
             r = (u_t[0] / u_t[1])  # linear velocity / angular velocity
 
-            first_deriv_x = (-1 * r * (np.cos(old_theta))) + (
-                        r * np.cos(old_theta + delta_theta))  # derivative w.r.t theta
-            first_deriv_y = (-1 * r * (np.sin(old_theta))) + (
-                        r * np.sin(old_theta + delta_theta))  # derivative w.r.t theta
+            # differentiate with respect to theta
+            first_deriv_x = (-1 * r * (np.cos(old_theta))) + (r * np.cos(old_theta + delta_theta))
+            first_deriv_y = (-1 * r * (np.sin(old_theta))) + (r * np.sin(old_theta + delta_theta))
         else:
-            # angle near zero, model as only linear movement
+            # angle near zero, model as strictly linear movement
+
+            # differentiate with respect to theta
             first_deriv_x = -1 * u_t[0] * np.sin(old_theta) * dt
             first_deriv_y = u_t[0] * np.cos(old_theta) * dt
 
-        # construct the matrix with derivatives of the motion model w.r.t the epuck's pose
+        # construct the jacobian matrix with derivatives of the motion model w.r.t the epuck's pose
         jacobian_wrt_pose = np.zeros((3, 3))
         jacobian_wrt_pose[0, 2] = first_deriv_x
         jacobian_wrt_pose[1, 2] = first_deriv_y
@@ -199,14 +197,14 @@ class EkfSlamController:
                                                                              f_x)
 
         # line 6
-        # Use the auxiliary matrix to update the covariance matrix from the previous covariance, plus some noise
-        # from a random variable that's added to the state each prediction update
+        # Use the auxiliary matrix to update the covariance matrix from the prior covariance, plus some noise from a
+        # random variable that's added to the state each prediction update
         updated_covariance = np.dot(np.dot(jacobian_wrt_combined_state_vector, self.covariance),
                                     jacobian_wrt_combined_state_vector.transpose()) + np.dot(
             np.dot(f_x.transpose(), self.NOISE), f_x)
 
 
-        # results are NOT written to the state of the object, as they are intermediate results
+        # results are NOT written to the attributes of the object, as they are intermediate results
         return updated_state_est, updated_covariance
 
     def __observation_update(self, z_t, state_estimate_bar, covariance_bar):
@@ -216,8 +214,8 @@ class EkfSlamController:
         # Need to decide whether each measurement corresponds to a new or existing landmark
 
 
-        # line 8 and beyond prob robotics (ekf slam known correspondences)
-        # define lists that accumulate relevant matrices from within the for-loops, that are required outside of it
+        # line 8 and beyond prob robotics (ekf slam full)
+        # define lists that accumulate relevant matrices from within the inner for-loop, that are required outside of it
         measurement_deltas = []
         measurement_jacobians = []
         kalman_gains = []
@@ -225,12 +223,8 @@ class EkfSlamController:
 
         # iterate through all the landmark measurements
         #
-        # Probabilistic Robotics takes the relative bearing between the robot's heading theta and the landmark as
-        # phi - when calculating it, I denoted it as alpha
-        #
-        # Probabilistic robotics refers to the iterator variable j as the index of the landmark in the list of
-        # landmarks - I denoted it as "correspondence". This version of the algorithm assumes this to be known for
-        # each measurement
+        # Note that Probabilistic Robotics takes the relative bearing between the robot's heading theta and the
+        # landmark as phi - when calculating it, I denoted it as alpha
         #
         # distance is the range between the landmark observed and the epuck
         #
@@ -242,6 +236,7 @@ class EkfSlamController:
 
         # define a locally-scoped counter used to track how many new landmarks are created
         n_t = self.landmark_counter
+
         # outer loop - iterate through the measurements
         for (distance, alpha, signature) in z_t:
             # re-pack so vector can be used later for getting delta between the actual and expected measurement
@@ -257,7 +252,7 @@ class EkfSlamController:
             # deciding whether to create a new landmark or update and existing one
             intermediate_deltas = []
             intermediate_landmark_measurement_covs = []
-            intermediate_manahalobis_dists = []
+            intermediate_mahalanobis_dists = []
             intermediate_h_jacobians = []
 
             # provisionally augment the state estimate vector to be one larger
@@ -266,7 +261,8 @@ class EkfSlamController:
 
             # provisionally augment the covariance matrix accordingly
             n = covariance_bar.shape[0]
-            covariance_speculation = np.pad(covariance_bar, ((0, 3), (0, 3)), mode='constant', constant_values=0)
+            # ((0,3), (0,3)): first pair -> pad 0 rows on top, 3 on the bottom, second pair -> 0 on left, 3 on right
+            covariance_speculation = np.pad(covariance_bar, ((0, 3), (0, 3)), mode = 'constant', constant_values = 0)
             covariance_speculation[n, n] = self.LANDMARK_COVARIANCE_INIT  # set the diagonal elements
             covariance_speculation[n + 1, n + 1] = self.LANDMARK_COVARIANCE_INIT
             covariance_speculation[n + 2, n + 2] = self.LANDMARK_COVARIANCE_INIT
@@ -287,7 +283,7 @@ class EkfSlamController:
                 # estimate the measurement using the measurement model
                 #
                 # ie. what is the expected value of the measurement of the landmark k, which is compared to the actual
-                # measured value later on, out of both of the for-loops
+                # measured value later
                 #
                 # the estimated measurement is constructed of the distance (sqrt q), the relative heading, and the
                 # signature variable
@@ -336,8 +332,8 @@ class EkfSlamController:
                                                          np.transpose(h_k_jacobian)) + self.Q
 
                 # line 17
-                # calculate the Mahalanobis distance between the measurement z, and the estimated measurement of
-                # landmark k with respect to the current epuck pose
+                # calculate the Mahalanobis distance (dist between vector and distribution) between the measurement z,
+                # and the estimated measurement of landmark k with respect to the current epuck pose
                 #
                 # want this quantity to be as low as possible, as want to interpret the measurement as measuring the
                 # landmark that makes the most sense from the current epuck pose
@@ -351,7 +347,7 @@ class EkfSlamController:
                 # add all these structures to the intermediate lists so that it can be decided whether the landmark is
                 # new or not, and then update the state estimate and covariance accordingly
                 intermediate_landmark_measurement_covs.append(landmark_measurement_covariance)
-                intermediate_manahalobis_dists.append(mahalanobis_dist)
+                intermediate_mahalanobis_dists.append(mahalanobis_dist)
                 intermediate_h_jacobians.append(h_k_jacobian)
                 intermediate_deltas.append((measurement - estimated_measurement_k))
                 # end inner for-loop
@@ -374,16 +370,17 @@ class EkfSlamController:
             # intuition for why this needs to be set at all:
             #   this quantity is populated by the inner for-loop above, but needs to be augmented, as the mahalanobis
             #       distance between the estimated measurement of landmark k if k is actually just this measurement
-            #       modelled as a new landmark, will always be trivially low
+            #       modelled as a new landmark, will always be trivially low. ie. Can always trivially create a new
+            #       landmark
             #   hence, to stop always preferring creating new landmarks in the state estimate, the mahalanobis distance
             #       between the estimated measurement of this landmark if it's new, and the actual measurement, needs
             #       to be upped to a threshold to regulate the association rate with existing landmarks vs creating
             #       new ones
-            intermediate_manahalobis_dists[len(intermediate_manahalobis_dists) - 1] = np.array([[self.ALPHA_THRESHOLD]])
+            intermediate_mahalanobis_dists[len(intermediate_mahalanobis_dists) - 1] = np.array([[self.ALPHA_THRESHOLD]])
 
             # line 20
             # select the landmark index that minimises the mahalanobis distance
-            j_i = np.argmin(intermediate_manahalobis_dists)
+            j_i = np.argmin(intermediate_mahalanobis_dists)
 
             # line 21
             # if the measurement is a new landmark
@@ -428,26 +425,26 @@ class EkfSlamController:
             #
             # with this change, each measurement that is processed now benefits from the uncertainty improvement made
             # from the previous, as the state estimate and covariance are updated inline, rather than in a batch
-            # fashion at the end
+            # fashion at the end, which means that the kalman gain is correctly informed when processing each measurement
 
 
             # can use the kalman gains for the index, as these lists have same number of elements (one per measurement)
             for i in range(0, len(kalman_gains)):
-                # cols need expanding to num of cols in state est
+                # kalman gains:
+                # regulate the number of columns to be the same as the number in the state estimate
                 while np.shape(kalman_gains[i])[0] < np.shape(state_estimate_bar)[0]:
                     kalman_gains[i] = np.vstack([kalman_gains[i], np.zeros((1, kalman_gains[i].shape[1]))])
                 while np.shape(kalman_gains[i])[0] > np.shape(state_estimate_bar)[0]:
                     kalman_gains[i] = kalman_gains[i][:-3, :]  # remove the last three rows
 
-                # step up measurement jacobians - rows need expanding to num of cols in state est:
+                # jacobians:
+                # regulate the number of rows to be the same as the number of columns in the state estimate
                 extra_cols = np.shape(state_estimate_bar)[0] - np.shape(measurement_jacobians[i])[1]
                 if extra_cols > 0:
                     measurement_jacobians[i] = np.hstack([
                         measurement_jacobians[i],
                         np.zeros((measurement_jacobians[i].shape[0], extra_cols))
                     ])
-
-                # trim columns off of measurement jacobian
                 while np.shape(measurement_jacobians[i])[1] > np.shape(state_estimate_bar)[0]:
                     measurement_jacobians[i] = measurement_jacobians[i][:, :-3]  # remove last three columns
 
