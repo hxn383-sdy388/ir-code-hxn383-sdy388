@@ -36,11 +36,12 @@ right_encoder.enable(timestep)
 odometry = Odometry(config.WHEEL_RADIUS, config.AXLE_LENGTH)
 
 motion = EPuckMotionController(
-    left_motor, 
-    right_motor, 
+    left_motor,
+    right_motor,
     timestep,
     max_acceleration=config.MAX_ACCELERATION,
-    max_deceleration=config.MAX_DECELERATION,
+    max_linear_deceleration=config.MAX_LINEAR_DECELERATION,
+    max_angular_deceleration=config.MAX_ANGULAR_DECELERATION,
     turning_factor=config.TURNING_FACTOR
 )
 

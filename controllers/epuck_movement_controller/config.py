@@ -13,7 +13,9 @@ TURNING_FACTOR = -1
 
 # Acceleration Parameters
 MAX_ACCELERATION = 2.0      # rad/s² - maximum rate of velocity change
-MAX_DECELERATION = 3.0      # rad/s² - can brake faster than accelerate
+# Separate deceleration parameters for fine-tuning overshooting
+MAX_LINEAR_DECELERATION = 3.0   # rad/s² - deceleration for linear movement (forward/backward)
+MAX_ANGULAR_DECELERATION = 4.0  # rad/s² - deceleration for angular movement (rotation)
 VELOCITY_THRESHOLD = 0.01   # rad/s - consider stopped below this
 
 # Collision Avoidance - Detection Thresholds
