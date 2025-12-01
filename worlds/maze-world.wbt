@@ -20,8 +20,6 @@ RectangleArena {
 E-puck {
   hidden position_0_0 -1.731510860002366e-14
   hidden position_0_1 -3.903463980531365e-15
-  hidden linearVelocity_0 -1.0210105934738402e-25 -2.4014698773539775e-15 2.368475785867001e-15
-  hidden angularVelocity_0 -6.239853089346721e-14 1.7171385811028592e-29 -2.108475421082096e-24
   translation -0.4 -0.2500000000000006 -6.396199578796724e-05
   rotation 0.9999999999999999 1.9885307856394795e-16 -1.3995273552830527e-14 4.889571086554824e-09
   controller "<extern>"
@@ -30,7 +28,7 @@ E-puck {
     Lidar {
       tiltAngle 0.052
       horizontalResolution 3
-      fieldOfView 0.087
+      fieldOfView 0.09
       verticalFieldOfView 0.01
       numberOfLayers 1
       maxRange 0.5
