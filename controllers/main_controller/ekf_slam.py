@@ -11,7 +11,7 @@ class EkfSlamController:
 
 
     # ---------- PARAMETERS ----------
-    ALPHA_THRESHOLD = 10
+    ALPHA_THRESHOLD = 5
 
 
     # The noise matrix is a diagonal matrix on which the elements are the covariance of random noise added to the state
@@ -30,7 +30,8 @@ class EkfSlamController:
     #
     # None of these values can be zero or the matrix inversion operation later falls apart.
     #
-    Q = np.diag([0.015, 0.015, 0.000000001]) # currently set to half the radius of the landmark objects.
+    # Q = np.diag([0.015, 0.015, 0.000000001]) # currently set to half the radius of the landmark objects.
+    Q = np.diag([0.0015, 0.0015, 0.000000001]) # currently set to half the radius of the landmark objects.
     # Q = np.diag([0.000000001, 0.000000001, 0.000000001])
 
 
