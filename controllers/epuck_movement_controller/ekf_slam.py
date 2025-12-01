@@ -23,7 +23,8 @@ class EkfSlamController:
     NOISE = np.diag([0.000000001, 0.000000001, 0.000000001])  # very low values due to high confidence in pose data
 
 
-    # Units for the first two elements are metres - ie. each of these are just distances.
+    # Units for the first element is metres - ie. just a distance.
+    # Units for the second element is radians.
     #
     # ie. for given range and relative bearing measurements, how far off are the actual range and bearing (and
     # signature - but that's expected to be zero in the current configuration) measurements expected to be.
