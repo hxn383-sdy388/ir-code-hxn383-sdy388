@@ -57,7 +57,7 @@ E-puck {
     }
   ]
 }
-DEF RedLandmark Solid {
+DEF BlueWall Solid {
   translation -0.25 -0.4 0
   rotation 0 1 0 0
   children [
@@ -74,7 +74,7 @@ DEF RedLandmark Solid {
   ]
   name "bottomLeftwall"
 }
-DEF RedLandmark Solid {
+DEF BlueWall Solid {
   translation -0.35 -0.1 0
   rotation 0 1 0 0
   children [
@@ -91,7 +91,7 @@ DEF RedLandmark Solid {
   ]
   name "middleWall"
 }
-DEF RedLandmark Solid {
+DEF BlueWall Solid {
   translation -0.15 0.2 0
   rotation 0 1 0 0
   children [
@@ -108,7 +108,7 @@ DEF RedLandmark Solid {
   ]
   name "topWall"
 }
-DEF RedLandmark Solid {
+DEF BlueWall Solid {
   translation 0 -0.1 0
   rotation 0 1 0 0
   children [
@@ -125,7 +125,7 @@ DEF RedLandmark Solid {
   ]
   name "rightWall"
 }
-DEF RedLandmark Solid {
+DEF BlueWall Solid {
   translation -0.275 0.25 0
   rotation 0 1 0 0
   children [
@@ -142,7 +142,7 @@ DEF RedLandmark Solid {
   ]
   name "topGuideWall"
 }
-DEF RedLandmark Solid {
+DEF BlueWall Solid {
   translation -0.075 0.3 0
   rotation 0 1 0 0
   children [
@@ -159,7 +159,7 @@ DEF RedLandmark Solid {
   ]
   name "topExtensionWall"
 }
-DEF RedLandmark Solid {
+DEF BlueWall Solid {
   translation 0.17 0 0
   rotation 0 1 0 0
   children [

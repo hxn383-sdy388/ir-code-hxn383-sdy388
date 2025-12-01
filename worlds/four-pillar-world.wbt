@@ -57,6 +57,7 @@ E-puck {
 DEF RedLandmark Solid {
   translation  0.25 -0.25 0.00
   rotation     0 1 0 0
+DEF RedPillar Solid {
   children [
     Shape {
       appearance PBRAppearance {
@@ -79,6 +80,7 @@ DEF RedLandmark Solid {
 DEF RedLandmark Solid {
   translation  0.25 0.25 0.00
   rotation     0 1 0 0
+DEF RedPillar Solid {
   children [
     Shape {
       appearance PBRAppearance {
@@ -101,6 +103,7 @@ DEF RedLandmark Solid {
 DEF RedLandmark Solid {
   translation  -0.25 0.25 0.00
   rotation     0 1 0 0
+DEF RedPillar Solid {
   children [
     Shape {
       appearance PBRAppearance {
@@ -123,6 +126,7 @@ DEF RedLandmark Solid {
 DEF RedLandmark Solid {
   translation  -0.25 -0.25 0.00
   rotation     0 1 0 0
+DEF RedPillar Solid {
   children [
     Shape {
       appearance PBRAppearance {
