@@ -462,6 +462,12 @@ class EkfSlamController:
 
             state_estimate_bar[2, 0] = np.arctan2(np.sin(state_estimate_bar[2, 0]), np.cos(state_estimate_bar[2, 0]))
 
+            # clear the accumulator lists for the next measurement, so that they don't hold values for old measurements
+            # when processing subsequent measurements
+            measurement_deltas = []
+            measurement_jacobians = []
+            kalman_gains = []
+
         # (out of outer for-loop)
 
         # update the state of the object
