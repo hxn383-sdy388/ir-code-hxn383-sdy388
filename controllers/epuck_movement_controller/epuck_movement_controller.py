@@ -33,7 +33,14 @@ left_encoder.enable(timestep)
 right_encoder.enable(timestep)
 
 # Initialize subsystems
-odometry = Odometry(config.WHEEL_RADIUS, config.AXLE_LENGTH)
+odometry = Odometry(
+    config.WHEEL_RADIUS,
+    config.AXLE_LENGTH,
+    linear_scale=config.ODOM_LINEAR_SCALE,
+    angular_scale=config.ODOM_ANGULAR_SCALE,
+    wheel_left_scale=config.ODOM_WHEEL_LEFT_SCALE,
+    wheel_right_scale=config.ODOM_WHEEL_RIGHT_SCALE
+)
 
 motion = EPuckMotionController(
     left_motor,
@@ -140,8 +147,7 @@ while robot.step(timestep) != -1:
 
     # Collect landmark measurements
     if measurements_available:
-        raw_measurements = measurement_controller.lidar_measure_landmarks()
-        z_t = sensor_utils.filter_wall_measurements(raw_measurements)
+        z_t = measurement_controller.lidar_measure_landmarks()
     else:
         z_t = []
 

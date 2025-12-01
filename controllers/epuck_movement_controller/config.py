@@ -6,6 +6,12 @@ WHEEL_RADIUS = 0.02        # meters
 AXLE_LENGTH = 0.058        # meters - CALIBRATED
 ENCODER_RESOLUTION = 160   # ticks per radian
 
+# Calibrated Odometry Parameters (from auto-calibration)
+ODOM_LINEAR_SCALE = 1.000206
+ODOM_ANGULAR_SCALE = 1.020148
+ODOM_WHEEL_LEFT_SCALE = 1.000240
+ODOM_WHEEL_RIGHT_SCALE = 0.999760
+
 # Motor Control
 MAXIMUM_SPEED = 5.0        # rad/s
 NORMAL_SPEED = MAXIMUM_SPEED / 2
