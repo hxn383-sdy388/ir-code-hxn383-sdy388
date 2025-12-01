@@ -77,24 +77,23 @@ class MeasurementController:
         # array of distance measurements
         range_image = self.lidar.getRangeImage()
 
-        # suppose it builds left to right
-        angle_increment = self.fov / 3
-
-        if self.num_of_beams % 2 == 0:
-            # even number of beams
-            angle_counter = -1 * self.num_of_beams / 2
+        # Calculate the angle increment between consecutive beams
+        # The FOV spans from the first beam to the last beam
+        if self.num_of_beams > 1:
+            angle_increment = self.fov / (self.num_of_beams - 1)
         else:
-            # odd number of beams
-            angle_counter = -1 * (self.num_of_beams - 1) / 2
+            angle_increment = 0
 
-        for measurement in range_image:
-            alpha = angle_counter * angle_increment
-            alpha = np.arctan2(np.sin(alpha), np.cos(alpha)) # bound the angle
+        # Starting angle (leftmost beam is at -fov/2)
+        start_angle = -self.fov / 2
+
+        for i, measurement in enumerate(range_image):
+            # Calculate angle for this beam
+            alpha = start_angle + (i * angle_increment)
+            alpha = np.arctan2(np.sin(alpha), np.cos(alpha))  # bound the angle
 
             # skip beams that aren't measuring anything
             if measurement != np.inf:
                 z.append((float(measurement), float(alpha), 0))
-
-            angle_counter += 1
 
         return z
