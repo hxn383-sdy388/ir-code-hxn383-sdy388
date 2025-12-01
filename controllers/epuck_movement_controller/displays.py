@@ -162,24 +162,62 @@ class DisplayController:
         for row in range(np.shape(occupancy_grid)[0]):
             col_alternator = row_alternator
             for col in range(np.shape(occupancy_grid)[1]):
-                # if the cell contains the epuck, draw it in green
-                if (row, col) == epuck_cell:
-                    self.occ_grid_disp.setColor(0x24fc03)
+                # Check cell value for smart encoding system
+                cell_value = occupancy_grid[row, col]
+
+                # Complete smart display grid color mapping:
+                # 0: Empty (dark grey background)
+                # 1: Obstacle (bright red)
+                # 2: Origin (bright blue)
+                # 3: Robot (bright green)
+                # 4: Path (yellow)
+                # 5: Near landmark (light red - danger zone)
+                # 6: Far landmark (dark red)
+                # 7: Wall (medium grey)
+                # 8: Buffer zone (dark yellow - safety margin)
+                # 9: Waypoint (orange)
+                # 10: Current waypoint (cyan)
+                # 11: Diagonal buffer (dark orange)
+                # 12: Robot heading (medium green)
+
+                if cell_value == 3:  # Robot position
+                    self.occ_grid_disp.setColor(0x00ff00)  # Bright green
                     self.occ_grid_disp.fillRectangle(col * cell_width, row * cell_height, cell_width, cell_height)
-                # if the cell contains the origin, draw it in pink
-                elif (row, col) == origin_cell:
-                    self.occ_grid_disp.setColor(0xbf22bd)
+                elif cell_value == 2:  # Origin
+                    self.occ_grid_disp.setColor(0x0080ff)  # Bright blue
                     self.occ_grid_disp.fillRectangle(col * cell_width, row * cell_height, cell_width, cell_height)
-                # if the cell is believed to be occupied, draw it in red
-                elif occupancy_grid[row, col] == 1:
-                    self.occ_grid_disp.setColor(0xd1022e)
+                elif cell_value == 1:  # Obstacle
+                    self.occ_grid_disp.setColor(0xff4444)  # Bright red
                     self.occ_grid_disp.fillRectangle(col * cell_width, row * cell_height, cell_width, cell_height)
-                # draw in cell as grey first for case where cell is free
-                elif col_alternator:
-                    self.occ_grid_disp.setColor(0xbbbdbf)
+                elif cell_value == 4:  # Path
+                    self.occ_grid_disp.setColor(0xffff00)  # Yellow
                     self.occ_grid_disp.fillRectangle(col * cell_width, row * cell_height, cell_width, cell_height)
-                else:
-                    self.occ_grid_disp.setColor(0x9b9d9e)
+                elif cell_value == 5:  # Near landmark
+                    self.occ_grid_disp.setColor(0xff8888)  # Light red
+                    self.occ_grid_disp.fillRectangle(col * cell_width, row * cell_height, cell_width, cell_height)
+                elif cell_value == 6:  # Far landmark
+                    self.occ_grid_disp.setColor(0x884444)  # Dark red
+                    self.occ_grid_disp.fillRectangle(col * cell_width, row * cell_height, cell_width, cell_height)
+                elif cell_value == 7:  # Wall
+                    self.occ_grid_disp.setColor(0x666666)  # Medium grey
+                    self.occ_grid_disp.fillRectangle(col * cell_width, row * cell_height, cell_width, cell_height)
+                elif cell_value == 8:  # Buffer zone
+                    self.occ_grid_disp.setColor(0x4a4a00)  # Dark yellow
+                    self.occ_grid_disp.fillRectangle(col * cell_width, row * cell_height, cell_width, cell_height)
+                elif cell_value == 9:  # Waypoint
+                    self.occ_grid_disp.setColor(0xffaa00)  # Orange
+                    self.occ_grid_disp.fillRectangle(col * cell_width, row * cell_height, cell_width, cell_height)
+                elif cell_value == 10:  # Current waypoint
+                    self.occ_grid_disp.setColor(0x00ffff)  # Cyan
+                    self.occ_grid_disp.fillRectangle(col * cell_width, row * cell_height, cell_width, cell_height)
+                elif cell_value == 11:  # Diagonal buffer
+                    self.occ_grid_disp.setColor(0x6a3a00)  # Dark orange
+                    self.occ_grid_disp.fillRectangle(col * cell_width, row * cell_height, cell_width, cell_height)
+                elif cell_value == 12:  # Robot heading
+                    self.occ_grid_disp.setColor(0x00aa00)  # Medium green
+                    self.occ_grid_disp.fillRectangle(col * cell_width, row * cell_height, cell_width, cell_height)
+                else:  # Empty space (0 or unknown)
+                    self.occ_grid_disp.setColor(0x202020)  # Dark grey background
                     self.occ_grid_disp.fillRectangle(col * cell_width, row * cell_height, cell_width, cell_height)
 
                 col_alternator = not col_alternator  # flip the alternator before drawing the cell in the next column

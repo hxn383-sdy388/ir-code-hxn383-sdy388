@@ -288,7 +288,7 @@ class EkfSlamController:
                 #
                 # the estimated measurement is constructed of the distance (sqrt q), the relative heading, and the
                 # signature variable
-                heading_est_k = np.atan2(delta_ky, delta_kx) - state_estimate_speculation[2, 0]
+                heading_est_k = np.arctan2(delta_ky, delta_kx) - state_estimate_speculation[2, 0]
                 estimated_measurement_k = np.array(
                     [[np.sqrt(q_k)], [np.arctan2(np.sin(heading_est_k), np.cos(heading_est_k))],
                      state_estimate_speculation[3 + (3 * k) + 2]])
