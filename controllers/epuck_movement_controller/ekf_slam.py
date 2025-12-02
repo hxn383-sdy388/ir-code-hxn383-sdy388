@@ -11,7 +11,7 @@ class EkfSlamController:
 
 
     # ---------- PARAMETERS ----------
-    ALPHA_THRESHOLD = 10
+    ALPHA_THRESHOLD = 5
 
 
     # The noise matrix is a diagonal matrix on which the elements are the covariance of random noise added to the state
@@ -23,14 +23,16 @@ class EkfSlamController:
     NOISE = np.diag([0.000000001, 0.000000001, 0.000000001])  # very low values due to high confidence in pose data
 
 
-    # Units for the first two elements are metres - ie. each of these are just distances.
+    # Units for the first element is metres - ie. just a distance.
+    # Units for the second element is radians.
     #
     # ie. for given range and relative bearing measurements, how far off are the actual range and bearing (and
     # signature - but that's expected to be zero in the current configuration) measurements expected to be.
     #
     # None of these values can be zero or the matrix inversion operation later falls apart.
     #
-    Q = np.diag([0.015, 0.015, 0.000000001]) # currently set to half the radius of the landmark objects.
+    # Q = np.diag([0.015, 0.015, 0.000000001]) # currently set to half the radius of the landmark objects.
+    Q = np.diag([0.0015, 0.0015, 0.000000001]) # currently set to half the radius of the landmark objects.
     # Q = np.diag([0.000000001, 0.000000001, 0.000000001])
 
 
@@ -461,6 +463,12 @@ class EkfSlamController:
                 covariance_bar = np.dot((np.eye(intermediate_var.shape[0]) - intermediate_var), covariance_bar)
 
             state_estimate_bar[2, 0] = np.arctan2(np.sin(state_estimate_bar[2, 0]), np.cos(state_estimate_bar[2, 0]))
+
+            # clear the accumulator lists for the next measurement, so that they don't hold values for old measurements
+            # when processing subsequent measurements
+            measurement_deltas = []
+            measurement_jacobians = []
+            kalman_gains = []
 
         # (out of outer for-loop)
 

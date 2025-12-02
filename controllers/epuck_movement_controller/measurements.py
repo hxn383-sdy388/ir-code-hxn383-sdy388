@@ -78,7 +78,7 @@ class MeasurementController:
         range_image = self.lidar.getRangeImage()
 
         # suppose it builds left to right
-        angle_increment = self.fov / 3
+        angle_increment = self.fov / self.num_of_beams
 
         if self.num_of_beams % 2 == 0:
             # even number of beams
