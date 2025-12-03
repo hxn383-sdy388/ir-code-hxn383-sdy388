@@ -121,6 +121,7 @@ path_planner.load_occupancy_grid(initial_occupancy_grid)
 # Control state
 mode = config.MODE_MANUAL
 start_position = None
+goal_position = None  # Track the final goal for replanning
 
 # SLAM state variables
 x_t = [0, 0, 0]  # Pose at current time t: [x, y, theta]
@@ -130,6 +131,104 @@ z_t = []         # Landmark measurements: [(distance, bearing, correspondence), 
 # Stable grid for path planning (initialized with empty 60x60 grid)
 # Use list comprehension to ensure deep copy
 stable_grid = [row[:] for row in initial_occupancy_grid]
+
+# Dynamic replanning state
+last_replan_iteration = 0
+stuck_counter = 0
+last_position = (0.0, 0.0)
+stuck_check_start_position = (0.0, 0.0)  # Position when stuck counter started incrementing
+replan_attempts = 0
+MAX_REPLAN_ATTEMPTS = 5  # Maximum consecutive replan attempts before giving up
+obstacle_avoidance_active = False  # Track if we're in obstacle avoidance mode
+consecutive_obstacle_detections = 0  # Track how long obstacle has been detected
+
+# Critical obstacle recovery state
+backup_mode_active = False
+backup_iterations = 0
+BACKUP_DURATION = 30  # Number of iterations to backup
+BACKUP_SPEED = 1.5    # Speed for backing up (rad/s)
+
+
+def plan_path_to_goal(planner, current_x, current_y, goal_x, goal_y):
+    """Helper function to plan path in robot-relative coordinates."""
+    # Convert goal to robot-relative coordinates
+    goal_rel_x = goal_x - current_x
+    goal_rel_y = goal_y - current_y
+
+    # Store current position for coordinate conversion
+    planner.robot_world_x = current_x
+    planner.robot_world_y = current_y
+
+    # Plan in relative coordinates
+    path = planner.plan_path(0.0, 0.0, goal_rel_x, goal_rel_y)
+
+    if path:
+        # Convert to world coordinates
+        world_path = []
+        for wp_rel_x, wp_rel_y in path:
+            wp_world_x = current_x + wp_rel_x
+            wp_world_y = current_y + wp_rel_y
+            world_path.append((wp_world_x, wp_world_y))
+        planner.current_path = world_path
+        return world_path
+    return None
+
+
+def find_avoidance_direction(collision_status, current_theta, goal_x, goal_y, current_x, current_y):
+    """Determine best direction to avoid obstacle based on sensor readings and goal direction."""
+    if not collision_status['obstacle_detected']:
+        return None
+
+    obstacle_dir = collision_status.get('obstacle_direction', 0)
+    if obstacle_dir is None:
+        return None
+
+    # Calculate perpendicular directions to obstacle (in world frame)
+    # obstacle_dir is relative to robot, convert to world frame
+    obstacle_world_dir = current_theta + obstacle_dir
+
+    perp_left = obstacle_world_dir + math.pi / 2
+    perp_right = obstacle_world_dir - math.pi / 2
+
+    # Normalize angles
+    perp_left = math.atan2(math.sin(perp_left), math.cos(perp_left))
+    perp_right = math.atan2(math.sin(perp_right), math.cos(perp_right))
+
+    # Calculate direction to goal
+    goal_dir = math.atan2(goal_y - current_y, goal_x - current_x)
+
+    # Choose direction that gets us closer to the goal direction
+    diff_left = abs(math.atan2(math.sin(perp_left - goal_dir),
+                               math.cos(perp_left - goal_dir)))
+    diff_right = abs(math.atan2(math.sin(perp_right - goal_dir),
+                                math.cos(perp_right - goal_dir)))
+
+    return perp_left if diff_left < diff_right else perp_right
+
+
+def create_local_avoidance_waypoint(current_x, current_y, avoidance_direction, distance):
+    """Create a temporary waypoint to avoid local obstacle."""
+    avoid_x = current_x + distance * math.cos(avoidance_direction)
+    avoid_y = current_y + distance * math.sin(avoidance_direction)
+    return (avoid_x, avoid_y)
+
+
+def execute_obstacle_avoidance(motion_controller, collision_status, current_theta, turn_speed):
+    """Execute reactive obstacle avoidance - turn away from obstacle."""
+    obstacle_dir = collision_status.get('obstacle_direction', 0)
+    if obstacle_dir is None:
+        return False
+
+    # Determine which way to turn based on obstacle location
+    # obstacle_dir is in robot frame: positive = left, negative = right
+    if obstacle_dir > 0:
+        # Obstacle on left, turn right
+        motion_controller.rotate_right(turn_speed * 0.5)
+        return True
+    else:
+        # Obstacle on right, turn left
+        motion_controller.rotate_left(turn_speed * 0.5)
+        return True
 
 # Main control loop
 iteration = 0
@@ -237,27 +336,28 @@ while robot.step(timestep) != -1:
             print(f"RETURN TO START ACTIVATED - ENHANCED VISUALIZATION ENABLED")
             print(f"Current: ({current_x:.3f}, {current_y:.3f})")
             print(f"Target:  ({start_position[0]:.3f}, {start_position[1]:.3f})")
-            
-            # Plan path using stable grid coordinates (robot-centric)
-            # Convert start position to relative coordinates for path planning
-            rel_start_x = start_position[0] - current_x
-            rel_start_y = start_position[1] - current_y
 
-            # Check if start position is within our stable grid window
-            if abs(rel_start_x) > config.PATH_PLANNING_MAX_RANGE or abs(rel_start_y) > config.PATH_PLANNING_MAX_RANGE:  # Outside planning range
-                print(f"Warning: Start position is {math.sqrt(rel_start_x**2 + rel_start_y**2):.2f}m away")
+            # Store goal for potential replanning
+            goal_position = start_position
+
+            # Check if goal is within our stable grid window
+            goal_rel_x = goal_position[0] - current_x
+            goal_rel_y = goal_position[1] - current_y
+            if abs(goal_rel_x) > config.PATH_PLANNING_MAX_RANGE or abs(goal_rel_y) > config.PATH_PLANNING_MAX_RANGE:
+                print(f"Warning: Goal is {math.sqrt(goal_rel_x**2 + goal_rel_y**2):.2f}m away")
                 print(f"Path planning may fail as target is outside stable grid window (3m x 3m)")
 
-            path = path_planner.plan_path(
-                current_x, current_y,
-                start_position[0], start_position[1]
-            )
-            
-            if path:
+            # Plan path using helper function
+            world_path = plan_path_to_goal(path_planner, current_x, current_y,
+                                           goal_position[0], goal_position[1])
+
+            if world_path:
                 mode = config.MODE_AUTONOMOUS
                 navigator.reset()
-                print(f"Final path: {len(path)} waypoints")
-                for i, wp in enumerate(path):
+                replan_attempts = 0  # Reset replan counter on successful initial plan
+                last_replan_iteration = iteration
+                print(f"Final path: {len(world_path)} waypoints")
+                for i, wp in enumerate(world_path):
                     print(f"  Waypoint {i}: ({wp[0]:.3f}, {wp[1]:.3f})")
             else:
                 print("Failed to plan path to start position!")
@@ -271,38 +371,253 @@ while robot.step(timestep) != -1:
     
     # Control based on mode
     if mode == config.MODE_AUTONOMOUS:
-        waypoint = path_planner.get_next_waypoint(
-            current_x, current_y,
-            final_waypoint_tolerance=config.WAYPOINT_DISTANCE_TOLERANCE
+        # Get collision avoidance status for dynamic replanning
+        ca_status = collision_avoidance.get_status()
+        max_sensor = ca_status['max_sensor_value']
+
+        # Check if we're stuck (not making progress)
+        # Only check for stuck when actually moving forward, not during turns
+        nav_state = navigator.get_state()
+
+        # Calculate distance moved since last iteration
+        distance_moved = math.sqrt((current_x - last_position[0])**2 +
+                                   (current_y - last_position[1])**2)
+
+        # Calculate total distance moved since stuck check started
+        total_distance_from_start = math.sqrt(
+            (current_x - stuck_check_start_position[0])**2 +
+            (current_y - stuck_check_start_position[1])**2
         )
-        
-        if waypoint is None:
-            # Reached final goal
-            if navigator.get_state() != 'idle':
-                print("\n" + "="*60)
-                print("DESTINATION REACHED!")
-                final_x, final_y, final_theta = odometry.get_pose()
-                error_x = final_x - start_position[0]
-                error_y = final_y - start_position[1]
-                error_distance = math.sqrt(error_x**2 + error_y**2)
-                print(f"Final position: ({final_x:.3f}, {final_y:.3f})")
-                print(f"Target position: ({start_position[0]:.3f}, {start_position[1]:.3f})")
-                print(f"Position error: {error_distance*100:.1f} cm")
-                print("="*60 + "\n")
-            
+
+        # Only count as stuck when in 'moving' state - turning in place is expected to not move
+        if nav_state == 'moving':
+            if distance_moved < config.REPLAN_STUCK_DISTANCE:
+                if stuck_counter == 0:
+                    # Just started potential stuck period - record starting position
+                    stuck_check_start_position = (current_x, current_y)
+                stuck_counter += 1
+            else:
+                # Made progress this iteration
+                stuck_counter = 0
+                # Only reset replan attempts if we've moved significantly
+                if distance_moved > config.REPLAN_STUCK_DISTANCE * 10:
+                    replan_attempts = 0
+                    obstacle_avoidance_active = False
+        elif nav_state in ('turning', 'stabilizing'):
+            # Don't increment stuck counter during turning, but don't reset either
+            # unless we've been turning for a very long time
+            if stuck_counter > config.REPLAN_STUCK_ITERATIONS * 2:
+                # Very long turning - might actually be stuck
+                pass  # Keep the counter
+            # Otherwise just don't increment
+        else:
+            # Idle or other state - reset if we have moved overall
+            if total_distance_from_start > config.REPLAN_STUCK_DISTANCE_TOTAL:
+                stuck_counter = 0
+                replan_attempts = 0
+
+        last_position = (current_x, current_y)
+
+        # Track consecutive obstacle detections
+        if ca_status['danger_zone'] or ca_status['critical']:
+            consecutive_obstacle_detections += 1
+        else:
+            consecutive_obstacle_detections = 0
+            obstacle_avoidance_active = False
+
+        # REACTIVE OBSTACLE AVOIDANCE
+        # If we detect an obstacle while moving, immediately start turning away
+        if ca_status['danger_zone'] and navigator.get_state() == 'moving' and goal_position is not None:
+            if consecutive_obstacle_detections > 3:  # Confirm it's not a glitch
+                if not obstacle_avoidance_active:
+                    print(f"\n[OBSTACLE AVOIDANCE] Danger zone detected - turning away")
+                    obstacle_avoidance_active = True
+
+                # Execute reactive avoidance - turn away from obstacle
+                execute_obstacle_avoidance(motion, ca_status, current_theta, config.NAVIGATION_TURN_SPEED)
+
+                # After turning for a bit, insert an avoidance waypoint
+                if consecutive_obstacle_detections > 15 and consecutive_obstacle_detections % 20 == 0:
+                    avoidance_dir = find_avoidance_direction(
+                        ca_status, current_theta,
+                        goal_position[0], goal_position[1],
+                        current_x, current_y
+                    )
+                    if avoidance_dir is not None:
+                        avoid_wp = create_local_avoidance_waypoint(
+                            current_x, current_y, avoidance_dir,
+                            config.LOCAL_AVOIDANCE_DISTANCE * 1.5
+                        )
+                        print(f"[OBSTACLE AVOIDANCE] Inserting detour waypoint: ({avoid_wp[0]:.3f}, {avoid_wp[1]:.3f})")
+
+                        current_wp_idx = path_planner.current_waypoint_index
+                        if current_wp_idx < len(path_planner.current_path):
+                            path_planner.current_path.insert(current_wp_idx, avoid_wp)
+                            navigator.reset()
+                            stuck_counter = 0
+                            replan_attempts += 1
+
+        # CRITICAL OBSTACLE BACKUP BEHAVIOR
+        # When critically close to obstacle, back up first before replanning
+        if backup_mode_active:
+            # Continue backing up
+            motion.backward(BACKUP_SPEED)
+            backup_iterations += 1
+
+            # Check if we should stop backing up
+            if backup_iterations >= BACKUP_DURATION or not ca_status['critical']:
+                print(f"[BACKUP] Completed - backed up for {backup_iterations} iterations")
+                backup_mode_active = False
+                backup_iterations = 0
+                motion.stop()
+                navigator.reset()
+
+                # Now do a full replan from current position
+                print(f"[BACKUP] Replanning from new position ({current_x:.3f}, {current_y:.3f})")
+                new_path = plan_path_to_goal(
+                    path_planner, current_x, current_y,
+                    goal_position[0], goal_position[1]
+                )
+                if new_path:
+                    print(f"[BACKUP] New path found: {len(new_path)} waypoints")
+                    stuck_counter = 0
+                    stuck_check_start_position = (current_x, current_y)
+                    replan_attempts = 0  # Reset attempts after successful backup+replan
+                    consecutive_obstacle_detections = 0
+                else:
+                    print("[BACKUP] Replanning failed - no path found")
+
+            # Skip normal navigation while backing up
+            # (handled by the elif below)
+
+        elif ca_status['critical'] and consecutive_obstacle_detections > 5 and goal_position is not None:
+            # Trigger backup mode when critically close to obstacle
+            if not backup_mode_active:
+                print(f"\n[BACKUP] Critical obstacle detected - initiating backup maneuver")
+                backup_mode_active = True
+                backup_iterations = 0
+                navigator.reset()  # Stop current navigation
+                motion.backward(BACKUP_SPEED)
+
+        # REPLANNING LOGIC
+        # Determine if we need to replan
+        needs_replan = False
+        replan_reason = ""
+
+        # Check if stuck for too long (and not already in avoidance mode or backup mode)
+        # Must meet BOTH criteria: high stuck counter AND low total movement
+        if stuck_counter > config.REPLAN_STUCK_ITERATIONS and not obstacle_avoidance_active and not backup_mode_active:
+            # Also verify we haven't actually moved much overall
+            if total_distance_from_start < config.REPLAN_STUCK_DISTANCE_TOTAL:
+                if iteration - last_replan_iteration > config.REPLAN_COOLDOWN_ITERATIONS:
+                    needs_replan = True
+                    replan_reason = f"Stuck for {stuck_counter} iterations (moved only {total_distance_from_start:.3f}m)"
+                    replan_attempts += 1  # Count this as an attempt
+            else:
+                # We've actually moved - reset stuck counter
+                stuck_counter = 0
+                stuck_check_start_position = (current_x, current_y)
+
+        # Note: Critical obstacle handling is now done via backup_mode above
+        # Only trigger traditional replan if backup mode is not active
+        elif ca_status['critical'] and consecutive_obstacle_detections > 10 and not backup_mode_active:
+            # This branch handles cases where backup didn't trigger (e.g., no goal)
+            if iteration - last_replan_iteration > config.REPLAN_COOLDOWN_ITERATIONS:
+                needs_replan = True
+                replan_reason = "CRITICAL obstacle - need alternate path"
+                replan_attempts += 1
+
+        # Perform replanning if needed
+        if needs_replan and goal_position is not None and replan_attempts < MAX_REPLAN_ATTEMPTS:
+            print(f"\n{'='*40}")
+            print(f"REPLANNING - Reason: {replan_reason}")
+            print(f"Attempt {replan_attempts}/{MAX_REPLAN_ATTEMPTS}")
+
+            # Try local avoidance first - insert waypoint perpendicular to obstacle
+            avoidance_dir = find_avoidance_direction(
+                ca_status, current_theta,
+                goal_position[0], goal_position[1],
+                current_x, current_y
+            )
+
+            if avoidance_dir is not None:
+                # Create avoidance waypoint further out
+                avoid_distance = config.LOCAL_AVOIDANCE_DISTANCE * (1 + replan_attempts * 0.5)
+                avoid_wp = create_local_avoidance_waypoint(
+                    current_x, current_y, avoidance_dir, avoid_distance
+                )
+                print(f"Local avoidance waypoint: ({avoid_wp[0]:.3f}, {avoid_wp[1]:.3f})")
+
+                # Insert at beginning of remaining path
+                current_wp_idx = path_planner.current_waypoint_index
+                if current_wp_idx < len(path_planner.current_path):
+                    path_planner.current_path.insert(current_wp_idx, avoid_wp)
+                    print(f"Inserted avoidance waypoint")
+                    navigator.reset()
+                    stuck_counter = 0
+            else:
+                # No clear avoidance direction, try full replan
+                print(f"Full replan from ({current_x:.3f}, {current_y:.3f}) to goal")
+                path_planner.load_occupancy_grid(stable_grid)
+
+                new_path = plan_path_to_goal(path_planner, current_x, current_y,
+                                             goal_position[0], goal_position[1])
+
+                if new_path:
+                    print(f"New path found: {len(new_path)} waypoints")
+                    navigator.reset()
+                    stuck_counter = 0
+                else:
+                    print("Replanning failed - no valid path found")
+
+            last_replan_iteration = iteration
+            print(f"{'='*40}\n")
+
+        # Check if we've exceeded replan attempts
+        if replan_attempts >= MAX_REPLAN_ATTEMPTS:
+            print("\nMax replan attempts reached - switching to manual mode")
             mode = config.MODE_MANUAL
             navigator.reset()
-        else:
-            # Navigate to waypoint
-            target_x, target_y = waypoint
-            current_wp, total_wp = path_planner.get_path_progress()
-            is_final = (current_wp == total_wp - 1)
-            
-            navigator.navigate_to_waypoint(
-                current_x, current_y, current_theta,
-                target_x, target_y,
-                is_final_waypoint=is_final
+            path_planner.clear_path()
+            replan_attempts = 0
+            obstacle_avoidance_active = False
+
+        # Normal waypoint navigation (only if not in active avoidance or backup mode)
+        if (not obstacle_avoidance_active or not ca_status['danger_zone']) and not backup_mode_active:
+            waypoint = path_planner.get_next_waypoint(
+                current_x, current_y,
+                final_waypoint_tolerance=config.WAYPOINT_DISTANCE_TOLERANCE
             )
+
+            if waypoint is None:
+                # Reached final goal
+                if navigator.get_state() != 'idle':
+                    print("\n" + "="*60)
+                    print("DESTINATION REACHED!")
+                    final_x, final_y, final_theta = odometry.get_pose()
+                    error_x = final_x - goal_position[0]
+                    error_y = final_y - goal_position[1]
+                    error_distance = math.sqrt(error_x**2 + error_y**2)
+                    print(f"Final position: ({final_x:.3f}, {final_y:.3f})")
+                    print(f"Target position: ({goal_position[0]:.3f}, {goal_position[1]:.3f})")
+                    print(f"Position error: {error_distance*100:.1f} cm")
+                    print("="*60 + "\n")
+
+                mode = config.MODE_MANUAL
+                navigator.reset()
+                goal_position = None
+                obstacle_avoidance_active = False
+            else:
+                # Navigate to waypoint
+                target_x, target_y = waypoint
+                current_wp, total_wp = path_planner.get_path_progress()
+                is_final = (current_wp == total_wp - 1)
+
+                navigator.navigate_to_waypoint(
+                    current_x, current_y, current_theta,
+                    target_x, target_y,
+                    is_final_waypoint=is_final
+                )
             
     elif mode == config.MODE_MANUAL:
         if key == Keyboard.UP:
@@ -337,30 +652,34 @@ while robot.step(timestep) != -1:
         status = collision_avoidance.get_status()
         status_str = ""
         if status['critical']:
-            status_str = " [CRITICAL OBSTACLE - STOPPED]"
+            status_str = " [CRITICAL!]"
         elif status['danger_zone']:
-            status_str = " [DANGER ZONE]"
+            status_str = " [DANGER]"
         elif status['obstacle_detected']:
-            status_str = " [OBSTACLE DETECTED]"
-        
+            status_str = " [OBSTACLE]"
+
+        # Add stuck indicator
+        if stuck_counter > 10:
+            status_str += f" [STUCK:{stuck_counter}]"
+
         if mode == config.MODE_AUTONOMOUS:
             current_wp, total_wp = path_planner.get_path_progress()
             waypoint = path_planner.get_next_waypoint(
                 current_x, current_y,
                 final_waypoint_tolerance=config.WAYPOINT_DISTANCE_TOLERANCE
             )
-            
+
             if waypoint:
                 distance = math.sqrt((waypoint[0] - current_x)**2 + (waypoint[1] - current_y)**2)
                 dx = waypoint[0] - current_x
                 dy = waypoint[1] - current_y
                 required_heading = math.atan2(dy, dx)
                 heading_error = navigator.calculate_heading_error(current_theta, required_heading)
-                
+
                 nav_state = navigator.get_state().upper()
                 if navigator.get_state() == 'stabilizing':
                     nav_state += f":{navigator.get_stabilize_counter()}"
-                
+
                 mode_str = (f"AUTO [{nav_state}] "
                            f"WP:{current_wp}/{total_wp} Dist:{distance:.2f}m "
                            f"HdgErr:{math.degrees(heading_error):.1f}°")
@@ -368,6 +687,6 @@ while robot.step(timestep) != -1:
                 mode_str = "AUTO [COMPLETE]"
         else:
             mode_str = "MANUAL"
-        
+
         print(f"[{mode_str}] Pose: ({current_x:.3f}, {current_y:.3f}, {math.degrees(current_theta):.1f}°) | "
               f"Vel: L={left_vel:.2f}, R={right_vel:.2f}{status_str}")

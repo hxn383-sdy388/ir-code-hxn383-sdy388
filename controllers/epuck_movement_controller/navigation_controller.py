@@ -139,11 +139,15 @@ class NavigationController:
             # Use PID control from the start
             turn_rate = self.calculate_turn_rate_pid(heading_error)
 
-            if turn_rate > 0:
-                speed = min(abs(turn_rate), self.turn_speed)
-                self.motion.rotate_left(speed)
+            # Ensure minimum turn rate to prevent getting stuck
+            if abs(turn_rate) < config.NAV_PID_TURN_RATE_MIN:
+                speed = config.NAV_PID_TURN_RATE_MIN
             else:
                 speed = min(abs(turn_rate), self.turn_speed)
+
+            if heading_error > 0:
+                self.motion.rotate_left(speed)
+            else:
                 self.motion.rotate_right(speed)
         else:
             self.state = 'moving'
@@ -155,10 +159,16 @@ class NavigationController:
             # Use PID-controlled turning to prevent overshooting
             turn_rate = self.calculate_turn_rate_pid(heading_error)
 
-            # Apply smooth turning based on PID output
+            # Ensure minimum turn rate to prevent getting stuck
+            # If PID outputs too small a value, use minimum speed in correct direction
             if abs(turn_rate) < config.NAV_PID_TURN_RATE_MIN:
-                # Very small correction - just stop
-                self.motion.stop()
+                # Apply minimum turn rate in the correct direction based on heading error
+                if heading_error > 0:
+                    speed = config.NAV_PID_TURN_RATE_MIN
+                    self.motion.rotate_left(speed)
+                else:
+                    speed = config.NAV_PID_TURN_RATE_MIN
+                    self.motion.rotate_right(speed)
             elif turn_rate > 0:
                 # Turn left with PID-controlled speed
                 speed = min(abs(turn_rate), self.turn_speed)

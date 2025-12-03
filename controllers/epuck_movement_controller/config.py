@@ -56,10 +56,10 @@ SENSOR_GROUPS = {
 }
 
 # Path Planning - Occupancy Grid Parameters
-GRID_CELL_SIZE = 0.05       # meters - size of each grid cell (5cm resolution)
+GRID_CELL_SIZE = 0.025       # meters - size of each grid cell (5cm resolution)
 GRID_ORIGIN_MARKER = '/'    # Marker in occupancy grid to indicate origin cell
-GRID_SAFETY_BUFFER = 1      # cells - safety buffer distance from obstacles (10cm at 5cm/cell)
-GRID_DIAGONAL_RESTRICTION_BUFFER = 1  # cells - restrict diagonals near obstacles
+GRID_SAFETY_BUFFER = 3      # cells - safety buffer distance from obstacles (10cm at 5cm/cell)
+GRID_DIAGONAL_RESTRICTION_BUFFER = 3  # cells - restrict diagonals near obstacles
 PLANNING_GRID_SIZE = 60     # cells - 60x60 grid for path planning (3m x 3m at 5cm/cell)
 DISPLAY_GRID_SIZE = 20      # cells - 20x20 grid for display visualization
 
@@ -107,7 +107,7 @@ NAV_PID_KI_NEGATIVE = 0.005   # Integral gain for negative turning factors (redu
 
 # Navigation PID Control - Limits
 NAV_PID_INTEGRAL_LIMIT = 0.5  # Maximum integral accumulation
-NAV_PID_TURN_RATE_MIN = 0.1   # Minimum turn rate to apply
+NAV_PID_TURN_RATE_MIN = 0.03  # Minimum turn rate to apply (lowered to prevent stuck state)
 NAV_PID_CORRECTION_LIMIT_FACTOR = 0.7  # Factor to limit corrections for negative turning
 NAV_TURNING_FACTOR_SCALE = 0.3  # Scale factor for turning factor influence on Kp
 NAV_TURNING_FACTOR_NORMAL_SCALE = 0.7  # Scale for normal turning factor influence
@@ -131,3 +131,12 @@ WALL_ANGLE_TOLERANCE = 15.0   # degrees - tolerance for consecutive wall measure
 
 # Path Planning Limits
 PATH_PLANNING_MAX_RANGE = 1.5  # meters - maximum planning range from robot (half of 3m grid)
+
+# Dynamic Replanning Parameters
+REPLAN_OBSTACLE_THRESHOLD = 150.0  # IR sensor value to trigger replanning consideration
+REPLAN_CRITICAL_THRESHOLD = 250.0  # IR sensor value to force immediate replanning
+REPLAN_COOLDOWN_ITERATIONS = 50    # Minimum iterations between replans (avoid thrashing)
+REPLAN_STUCK_ITERATIONS = 100      # If stuck for this many iterations, force replan (increased)
+REPLAN_STUCK_DISTANCE = 0.005      # meters - movement less than this per iteration = stuck (5mm)
+REPLAN_STUCK_DISTANCE_TOTAL = 0.05 # meters - if moved less than this over STUCK_ITERATIONS, stuck
+LOCAL_AVOIDANCE_DISTANCE = 0.15    # meters - distance for local avoidance waypoint
