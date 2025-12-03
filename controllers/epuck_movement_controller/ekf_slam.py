@@ -14,25 +14,23 @@ class EkfSlamController:
     ALPHA_THRESHOLD = 5
 
 
-    # The noise matrix is a diagonal matrix on which the elements are the covariance of random noise added to the state
-    # uncertainty at every prediction step.
+    # The noise matrix is a covariance matrix of the noise added to the state uncertainty at every prediction step.
     #
-    # ie. if the first diagonal element was set to 1, this would correspond to an addition of 1 metre's worth of
-    # uncertainty in the x coordinate of the epuck's pose per timestep.
+    # ie. each diagonal element corresponds to a variance, which can be tuned to capture uncertainty in the pose
     #
-    NOISE = np.diag([0.000000001, 0.000000001, 0.000000001])  # very low values due to high confidence in pose data
+    NOISE = np.diag([0.000000001, 0.000000001, 0.000000001])
 
 
-    # Units for the first element is metres - ie. just a distance.
-    # Units for the second element is radians.
+    # Diagonal values in Q capture the variances in the range, bearing, and signature measurements
+    # ie. these values can be tuned to capture uncertainty in the measurements
     #
-    # ie. for given range and relative bearing measurements, how far off are the actual range and bearing (and
-    # signature - but that's expected to be zero in the current configuration) measurements expected to be.
+    # Units for the first element is metres-squared
+    # Units for the second element is radians-squared
     #
     # None of these values can be zero or the matrix inversion operation later falls apart.
     #
-    # Q = np.diag([0.015, 0.015, 0.000000001]) # currently set to half the radius of the landmark objects.
-    Q = np.diag([0.0015, 0.0015, 0.000000001]) # currently set to half the radius of the landmark objects.
+    # Q = np.diag([0.015, 0.015, 0.000000001])
+    Q = np.diag([0.0015, 0.0015, 0.000000001])
     # Q = np.diag([0.000000001, 0.000000001, 0.000000001])
 
 
