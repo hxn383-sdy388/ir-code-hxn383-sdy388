@@ -75,7 +75,12 @@ path_planner = AStarPlanner(
     goal_tolerance=config.ASTAR_GOAL_TOLERANCE,
     safety_buffer=config.GRID_SAFETY_BUFFER,
     diagonal_restriction_buffer=config.GRID_DIAGONAL_RESTRICTION_BUFFER,
-    aggressive_smoothing=config.ASTAR_AGGRESSIVE_SMOOTHING
+    aggressive_smoothing=config.ASTAR_AGGRESSIVE_SMOOTHING,
+    smooth_around_corner=config.SMOOTH_AROUND_CORNER,
+    smooth_corner_distance=config.SMOOTH_CORNER_DISTANCE,
+    smooth_corner_arc_points=config.SMOOTH_CORNER_ARC_POINTS,
+    smooth_corner_clearance=config.SMOOTH_CORNER_CLEARANCE,
+    smooth_corner_min_angle=config.SMOOTH_CORNER_MIN_ANGLE
 )
 
 navigator = NavigationController(

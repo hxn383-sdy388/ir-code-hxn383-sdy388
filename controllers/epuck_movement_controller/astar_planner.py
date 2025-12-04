@@ -54,7 +54,10 @@ class AStarPlanner:
                  diagonal_cost=1.414, straight_cost=1.0,
                  allow_diagonal=True, goal_tolerance=0.05,
                  safety_buffer=2, diagonal_restriction_buffer=2,
-                 aggressive_smoothing=True):
+                 aggressive_smoothing=True,
+                 smooth_around_corner=True, smooth_corner_distance=0.10,
+                 smooth_corner_arc_points=3, smooth_corner_clearance=0.06,
+                 smooth_corner_min_angle=0.5):
 
         self.cell_size = grid_cell_size
         self.origin_marker = origin_marker
@@ -66,6 +69,13 @@ class AStarPlanner:
         self.safety_buffer = safety_buffer
         self.diagonal_restriction_buffer = diagonal_restriction_buffer
         self.aggressive_smoothing = aggressive_smoothing
+
+        # Smooth corner parameters
+        self.smooth_around_corner = smooth_around_corner
+        self.smooth_corner_distance = smooth_corner_distance
+        self.smooth_corner_arc_points = smooth_corner_arc_points
+        self.smooth_corner_clearance = smooth_corner_clearance
+        self.smooth_corner_min_angle = smooth_corner_min_angle
 
         # Grid storage using dictionaries for sparse representation
         self.occupancy_grid: Dict[Tuple[int, int], int] = {}
@@ -431,7 +441,150 @@ class AStarPlanner:
             current_idx = best_idx
 
         return optimized
-    
+
+    def _is_near_obstacle(self, world_x: float, world_y: float) -> bool:
+        """Check if a world position is near an obstacle."""
+        grid_x, grid_y = self.world_to_grid(world_x, world_y)
+
+        # Check nearby cells for obstacles
+        check_radius = max(2, int(self.smooth_corner_distance / self.cell_size))
+        for dx in range(-check_radius, check_radius + 1):
+            for dy in range(-check_radius, check_radius + 1):
+                check_pos = (grid_x + dx, grid_y + dy)
+                if self.occupancy_grid.get(check_pos, 0) == 1:
+                    return True
+        return False
+
+    def _find_nearest_obstacle_direction(self, world_x: float, world_y: float) -> Optional[float]:
+        """Find the direction to the nearest obstacle from a world position.
+
+        Returns the angle in radians pointing TOWARDS the nearest obstacle,
+        or None if no obstacle is nearby."""
+        grid_x, grid_y = self.world_to_grid(world_x, world_y)
+
+        check_radius = max(3, int(self.smooth_corner_distance / self.cell_size) + 1)
+        min_dist = float('inf')
+        nearest_obstacle = None
+
+        for dx in range(-check_radius, check_radius + 1):
+            for dy in range(-check_radius, check_radius + 1):
+                check_pos = (grid_x + dx, grid_y + dy)
+                if self.occupancy_grid.get(check_pos, 0) == 1:
+                    dist = math.sqrt(dx * dx + dy * dy)
+                    if dist < min_dist:
+                        min_dist = dist
+                        nearest_obstacle = (dx, dy)
+
+        if nearest_obstacle is None:
+            return None
+
+        # Convert grid direction to world angle
+        # Remember Y is inverted in grid coordinates
+        obs_dx, obs_dy = nearest_obstacle
+        return math.atan2(-obs_dy, obs_dx)  # Negate dy due to Y inversion
+
+    def _smooth_corners(self, path: List[Tuple[float, float]]) -> List[Tuple[float, float]]:
+        """Add smooth arc waypoints around corners near obstacles.
+
+        This method detects sharp turns in the path that are near obstacles
+        and inserts intermediate waypoints to create a smooth curve around them.
+        """
+        if len(path) < 3 or not self.smooth_around_corner:
+            return path
+
+        smoothed = [path[0]]
+
+        for i in range(1, len(path) - 1):
+            prev_wp = path[i - 1]
+            curr_wp = path[i]
+            next_wp = path[i + 1]
+
+            # Calculate incoming and outgoing directions
+            in_dx = curr_wp[0] - prev_wp[0]
+            in_dy = curr_wp[1] - prev_wp[1]
+            out_dx = next_wp[0] - curr_wp[0]
+            out_dy = next_wp[1] - curr_wp[1]
+
+            in_len = math.sqrt(in_dx * in_dx + in_dy * in_dy)
+            out_len = math.sqrt(out_dx * out_dx + out_dy * out_dy)
+
+            if in_len < 0.001 or out_len < 0.001:
+                smoothed.append(curr_wp)
+                continue
+
+            # Normalize directions
+            in_dx /= in_len
+            in_dy /= in_len
+            out_dx /= out_len
+            out_dy /= out_len
+
+            # Calculate turn angle using dot product
+            dot = in_dx * out_dx + in_dy * out_dy
+            dot = max(-1.0, min(1.0, dot))  # Clamp for numerical stability
+            turn_angle = math.acos(dot)
+
+            # Check if this is a significant turn near an obstacle
+            if turn_angle >= self.smooth_corner_min_angle and self._is_near_obstacle(*curr_wp):
+                # Find direction away from obstacle
+                obstacle_dir = self._find_nearest_obstacle_direction(*curr_wp)
+
+                if obstacle_dir is not None:
+                    # Direction away from obstacle
+                    away_dir = obstacle_dir + math.pi
+
+                    # Calculate the bisector of the turn (average of in and out directions)
+                    in_angle = math.atan2(in_dy, in_dx)
+                    out_angle = math.atan2(out_dy, out_dx)
+
+                    # Use cross product to determine turn direction (left or right)
+                    cross = in_dx * out_dy - in_dy * out_dx
+
+                    # Generate arc waypoints
+                    arc_points = []
+                    for j in range(self.smooth_corner_arc_points):
+                        # Parameter from 0 to 1 along the arc
+                        t = (j + 1) / (self.smooth_corner_arc_points + 1)
+
+                        # Interpolate position along the path
+                        # Blend between approaching curr_wp and leaving curr_wp
+                        blend_in = 1.0 - t
+                        blend_out = t
+
+                        # Base position: interpolate between before and after corner
+                        base_x = prev_wp[0] + (curr_wp[0] - prev_wp[0]) * (0.5 + t * 0.5)
+                        base_y = prev_wp[1] + (curr_wp[1] - prev_wp[1]) * (0.5 + t * 0.5)
+
+                        if t > 0.5:
+                            # Past the midpoint, blend towards next waypoint
+                            t2 = (t - 0.5) * 2
+                            base_x = curr_wp[0] + (next_wp[0] - curr_wp[0]) * t2 * 0.5
+                            base_y = curr_wp[1] + (next_wp[1] - curr_wp[1]) * t2 * 0.5
+
+                        # Add offset away from obstacle (curved path)
+                        # Maximum offset at the middle of the arc
+                        offset_factor = math.sin(t * math.pi) * self.smooth_corner_clearance
+
+                        arc_x = base_x + math.cos(away_dir) * offset_factor
+                        arc_y = base_y + math.sin(away_dir) * offset_factor
+
+                        # Verify the arc point is valid (not in obstacle)
+                        arc_grid = self.world_to_grid(arc_x, arc_y)
+                        if self.is_valid_cell(*arc_grid, use_buffer=False):
+                            arc_points.append((arc_x, arc_y))
+
+                    # Add arc points if we generated valid ones
+                    if arc_points:
+                        smoothed.extend(arc_points)
+                    else:
+                        smoothed.append(curr_wp)
+                else:
+                    smoothed.append(curr_wp)
+            else:
+                smoothed.append(curr_wp)
+
+        smoothed.append(path[-1])
+        return smoothed
+
     def plan_path(self, start_x: float, start_y: float,
                   goal_x: float, goal_y: float) -> Optional[List[Tuple[float, float]]]:
         """Plan a path from start to goal using A* algorithm.
@@ -532,6 +685,15 @@ class AStarPlanner:
                     self.current_path = optimized
                 else:
                     self.current_path = smoothed
+
+                # Apply smooth corner processing if enabled
+                if self.smooth_around_corner and len(self.current_path) >= 3:
+                    corner_smoothed = self._smooth_corners(self.current_path)
+                    if corner_smoothed:
+                        corner_smoothed[-1] = (goal_x, goal_y)
+                        if len(corner_smoothed) != len(self.current_path):
+                            print(f"Corner-smoothed path: {len(corner_smoothed)} waypoints")
+                        self.current_path = corner_smoothed
 
                 self.current_waypoint_index = 0
 

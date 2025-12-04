@@ -58,8 +58,8 @@ SENSOR_GROUPS = {
 # Path Planning - Occupancy Grid Parameters
 GRID_CELL_SIZE = 0.025       # meters - size of each grid cell (5cm resolution)
 GRID_ORIGIN_MARKER = '/'    # Marker in occupancy grid to indicate origin cell
-GRID_SAFETY_BUFFER = 3      # cells - safety buffer distance from obstacles (10cm at 5cm/cell)
-GRID_DIAGONAL_RESTRICTION_BUFFER = 3  # cells - restrict diagonals near obstacles
+GRID_SAFETY_BUFFER = 1      # cells - safety buffer distance from obstacles (10cm at 5cm/cell)
+GRID_DIAGONAL_RESTRICTION_BUFFER = 1  # cells - restrict diagonals near obstacles
 PLANNING_GRID_SIZE = 60     # cells - 60x60 grid for path planning (3m x 3m at 5cm/cell)
 DISPLAY_GRID_SIZE = 20      # cells - 20x20 grid for display visualization
 
@@ -69,6 +69,13 @@ ASTAR_STRAIGHT_COST = 1.0    # Cost for straight movement
 ASTAR_ALLOW_DIAGONAL = True  # Allow diagonal movement in path planning
 ASTAR_GOAL_TOLERANCE = 0.15  # meters - distance to goal considered "reached"
 ASTAR_AGGRESSIVE_SMOOTHING = True  # Use aggressive path smoothing
+
+# Smooth Corner Navigation - curves around obstacles instead of sharp turns
+SMOOTH_AROUND_CORNER = True           # Enable smooth curved paths around obstacles
+SMOOTH_CORNER_DISTANCE = 0.10         # meters - distance threshold to detect corner near obstacle
+SMOOTH_CORNER_ARC_POINTS = 3          # Number of intermediate points in the arc
+SMOOTH_CORNER_CLEARANCE = 0.06        # meters - extra clearance from obstacles during curve
+SMOOTH_CORNER_MIN_ANGLE = 0.5         # radians (~30 deg) - minimum turn angle to apply smoothing
 
 # Navigation Parameters
 HEADING_TOLERANCE = 0.08     # radians (~4.6 degrees) - heading alignment tolerance
