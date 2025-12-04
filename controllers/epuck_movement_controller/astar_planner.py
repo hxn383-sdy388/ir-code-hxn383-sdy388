@@ -398,9 +398,8 @@ class AStarPlanner:
                 current_grid = self.world_to_grid(*smoothed[-1])
                 test_grid = self.world_to_grid(*path[test_idx])
 
-                # Use non-buffered check for line of sight (original obstacles only)
-                # This allows paths closer to obstacles for efficiency
-                if self._line_of_sight(current_grid, test_grid, use_buffer=False):
+                # Use buffered check for line of sight to respect safety margins
+                if self._line_of_sight(current_grid, test_grid, use_buffer=True):
                     farthest_visible = test_idx
                     break
 
@@ -567,9 +566,9 @@ class AStarPlanner:
                         arc_x = base_x + math.cos(away_dir) * offset_factor
                         arc_y = base_y + math.sin(away_dir) * offset_factor
 
-                        # Verify the arc point is valid (not in obstacle)
+                        # Verify the arc point is valid (respects safety buffer)
                         arc_grid = self.world_to_grid(arc_x, arc_y)
-                        if self.is_valid_cell(*arc_grid, use_buffer=False):
+                        if self.is_valid_cell(*arc_grid, use_buffer=True):
                             arc_points.append((arc_x, arc_y))
 
                     # Add arc points if we generated valid ones
