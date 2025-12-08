@@ -8,6 +8,8 @@
 
 This project implements the "explore and return" problem using an E-Puck in Webots. 
 
+The main controller is in `epuck_movement_controller/epuck_movement_controller.py`.
+
 ## Implementation Details
 
 Salmaan implemented the autonomous navigation system comprising the motion controller (with smooth velocity ramping), waypoint navigation module (using turn-then-move strategy), collision avoidance system (IR sensor-based safety layer), and A* path planner (featuring corridor centering and adaptive resolution). Additionally, he co-developed the smart display grid for real-time visualization of the robot's state, environment mapping, and path planning.
