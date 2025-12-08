@@ -11,26 +11,26 @@ class EkfSlamController:
 
 
     # ---------- PARAMETERS ----------
-    ALPHA_THRESHOLD = 10
+    ALPHA_THRESHOLD = 5
 
 
-    # The noise matrix is a diagonal matrix on which the elements are the covariance of random noise added to the state
-    # uncertainty at every prediction step.
+    # The noise matrix is a covariance matrix of the noise added to the state uncertainty at every prediction step.
     #
-    # ie. if the first diagonal element was set to 1, this would correspond to an addition of 1 metre's worth of
-    # uncertainty in the x coordinate of the epuck's pose per timestep.
+    # ie. each diagonal element corresponds to a variance, which can be tuned to capture uncertainty in the pose
     #
-    NOISE = np.diag([0.000000001, 0.000000001, 0.000000001])  # very low values due to high confidence in pose data
+    NOISE = np.diag([0.000000001, 0.000000001, 0.000000001])
 
 
-    # Units for the first two elements are metres - ie. each of these are just distances.
+    # Diagonal values in Q capture the variances in the range, bearing, and signature measurements
+    # ie. these values can be tuned to capture uncertainty in the measurements
     #
-    # ie. for given range and relative bearing measurements, how far off are the actual range and bearing (and
-    # signature - but that's expected to be zero in the current configuration) measurements expected to be.
+    # Units for the first element is metres-squared
+    # Units for the second element is radians-squared
     #
     # None of these values can be zero or the matrix inversion operation later falls apart.
     #
-    Q = np.diag([0.015, 0.015, 0.000000001]) # currently set to half the radius of the landmark objects.
+    # Q = np.diag([0.015, 0.015, 0.000000001])
+    Q = np.diag([0.0015, 0.0015, 0.000000001])
     # Q = np.diag([0.000000001, 0.000000001, 0.000000001])
 
 
@@ -287,7 +287,7 @@ class EkfSlamController:
                 #
                 # the estimated measurement is constructed of the distance (sqrt q), the relative heading, and the
                 # signature variable
-                heading_est_k = np.atan2(delta_ky, delta_kx) - state_estimate_speculation[2, 0]
+                heading_est_k = np.arctan2(delta_ky, delta_kx) - state_estimate_speculation[2, 0]
                 estimated_measurement_k = np.array(
                     [[np.sqrt(q_k)], [np.arctan2(np.sin(heading_est_k), np.cos(heading_est_k))],
                      state_estimate_speculation[3 + (3 * k) + 2]])
@@ -461,6 +461,12 @@ class EkfSlamController:
                 covariance_bar = np.dot((np.eye(intermediate_var.shape[0]) - intermediate_var), covariance_bar)
 
             state_estimate_bar[2, 0] = np.arctan2(np.sin(state_estimate_bar[2, 0]), np.cos(state_estimate_bar[2, 0]))
+
+            # clear the accumulator lists for the next measurement, so that they don't hold values for old measurements
+            # when processing subsequent measurements
+            measurement_deltas = []
+            measurement_jacobians = []
+            kalman_gains = []
 
         # (out of outer for-loop)
 

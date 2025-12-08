@@ -1,0 +1,178 @@
+#VRML_SIM R2025a utf8
+
+EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/objects/backgrounds/protos/TexturedBackground.proto"
+EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/objects/backgrounds/protos/TexturedBackgroundLight.proto"
+EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/objects/floors/protos/RectangleArena.proto"
+EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/robots/gctronic/e-puck/protos/E-puck.proto"
+
+WorldInfo {
+}
+Viewpoint {
+  orientation -0.5773502691896257 0.5773502691896257 0.5773502691896257 2.0944
+  position -1.9003287298755767e-05 -1.9003341032101295e-05 3.2794307583353905
+}
+TexturedBackground {
+}
+TexturedBackgroundLight {
+}
+RectangleArena {
+}
+E-puck {
+  hidden position_0_0 -1.731510860002366e-14
+  hidden position_0_1 -3.903463980531365e-15
+  translation -0.4 -0.2500000000000006 -6.396199578796724e-05
+  rotation 0.9999999999999999 1.9885307856394795e-16 -1.3995273552830527e-14 4.889571086554824e-09
+  controller "<extern>"
+  supervisor TRUE
+  turretSlot [
+    Lidar {
+      tiltAngle 0.052
+      horizontalResolution 3
+      fieldOfView 0.09
+      verticalFieldOfView 0.01
+      numberOfLayers 1
+      maxRange 0.5
+      defaultFrequency 60
+      minFrequency 60
+      maxFrequency 60
+    }
+    Display {
+      name "occupancy-grid"
+      width 100
+      height 100
+    }
+    Display {
+      width 100
+      height 100
+    }
+    Camera {
+      name "recognitioncamera"
+      fieldOfView 0.84
+      width 128
+      height 96
+      recognition Recognition {
+        maxRange 0.15
+        maxObjects 32
+      }
+    }
+  ]
+}
+DEF BlueWall Solid {
+  translation -0.25 -0.4 0
+  rotation 0 1 0 0
+  children [
+    Shape {
+      appearance PBRAppearance {
+        baseColor 0 0 1
+        roughness 0.5
+        metalness 0
+      }
+      geometry Box {
+        size 0.5 0.05 0.3
+      }
+    }
+  ]
+  name "bottomLeftwall"
+}
+DEF BlueWall Solid {
+  translation -0.35 -0.1 0
+  rotation 0 1 0 0
+  children [
+    Shape {
+      appearance PBRAppearance {
+        baseColor 0 0 1
+        roughness 0.5
+        metalness 0
+      }
+      geometry Box {
+        size 0.3 0.05 0.3
+      }
+    }
+  ]
+  name "middleWall"
+}
+DEF BlueWall Solid {
+  translation -0.15 0.2 0
+  rotation 0 1 0 0
+  children [
+    Shape {
+      appearance PBRAppearance {
+        baseColor 0 0 1
+        roughness 0.5
+        metalness 0
+      }
+      geometry Box {
+        size 0.3 0.05 0.3
+      }
+    }
+  ]
+  name "topWall"
+}
+DEF BlueWall Solid {
+  translation 0 -0.1 0
+  rotation 0 1 0 0
+  children [
+    Shape {
+      appearance PBRAppearance {
+        baseColor 0 0 1
+        roughness 0.5
+        metalness 0
+      }
+      geometry Box {
+        size 0.05 0.65 0.3
+      }
+    }
+  ]
+  name "rightWall"
+}
+DEF BlueWall Solid {
+  translation -0.275 0.25 0
+  rotation 0 1 0 0
+  children [
+    Shape {
+      appearance PBRAppearance {
+        baseColor 0 0 1
+        roughness 0.5
+        metalness 0
+      }
+      geometry Box {
+        size 0.05 0.1 0.3
+      }
+    }
+  ]
+  name "topGuideWall"
+}
+DEF BlueWall Solid {
+  translation -0.075 0.3 0
+  rotation 0 1 0 0
+  children [
+    Shape {
+      appearance PBRAppearance {
+        baseColor 0 0 1
+        roughness 0.5
+        metalness 0
+      }
+      geometry Box {
+        size 0.45 0.05 0.3
+      }
+    }
+  ]
+  name "topExtensionWall"
+}
+DEF BlueWall Solid {
+  translation 0.17 0 0
+  rotation 0 1 0 0
+  children [
+    Shape {
+      appearance PBRAppearance {
+        baseColor 0 0 1
+        roughness 0.5
+        metalness 0
+      }
+      geometry Box {
+        size 0.05 0.65 0.3
+      }
+    }
+  ]
+  name "rightExtensionWall"
+}
